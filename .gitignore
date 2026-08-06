@@ -1,0 +1,17 @@
+# Node
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+
+# OS
+Thumbs.db
+.DS_Store
+
+# VS Code
+.vscode/settings.json

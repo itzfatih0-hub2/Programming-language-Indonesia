@@ -1,0 +1,27 @@
+{
+  "name": "bahasa-indonesia",
+  "version": "1.0.0",
+  "description": "Bahasa Pemrograman Bahasa Indonesia (Baku & Gaul)",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "indo index.js",
+    "test": "indo examples/halo.indo"
+  },
+  "keywords": [
+    "bahasa",
+    "programming-language",
+    "compiler",
+    "interpreter",
+    "indonesia"
+  ],
+  "author": "Itz Fatih",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "axios": "^1.19.0",
+    "better-sqlite3": "^13.0.3"
+  }
+}
