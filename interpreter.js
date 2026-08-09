@@ -1,85 +1,120 @@
 // =======================================
 // Bahasa Indonesia Programming Language
-// Interpreter v1
+// Interpreter v2
+// AST Consistent Edition
 // =======================================
-const stdlib = require("./stdlib");
+
+class ReturnSignal {
+
+    constructor(value) {
+        this.value = value;
+    }
+
+}
+
+// =======================================
+// Interpreter
+// =======================================
 
 class Interpreter {
 
-    constructor() {
+    constructor(stdlib = {}) {
 
-    this.globals = new Map();
+        this.globals = new Map();
 
-    for (const [nama, fungsi] of Object.entries(stdlib)) {
+        // Standard Library
+        for (const [nama, fungsi] of Object.entries(stdlib)) {
 
-        this.globals.set(nama, fungsi);
-
-    }
-
-    this.globals.set("benar", true);
-    this.globals.set("salah", false);
-    this.globals.set("kosong", null);
-
-    }
-
-    // =======================================
-    // Entry
-    // =======================================
-
-    interpret(program) {
-
-        for (const statement of program.body) {
-
-            this.execute(statement);
+            this.globals.set(nama, fungsi);
 
         }
 
     }
 
     // =======================================
-    // Execute Statement
+    // PROGRAM
+    // =======================================
+
+    interpret(program) {
+
+        if (!program || program.type !== "Program") {
+
+            throw new Error(
+                "AST tidak valid. Root harus bertipe 'Program'."
+            );
+
+        }
+
+        let result = null;
+
+        for (const statement of program.body) {
+
+            result = this.execute(statement);
+
+        }
+
+        return result;
+
+    }
+
+    // =======================================
+    // STATEMENT
     // =======================================
 
     execute(node) {
 
-    switch (node.type) {
-
-        case "VariableDeclaration":
-            return this.executeVariable(node);
-
-        case "PrintStatement":
-            return this.executePrint(node);
-
-        case "ExpressionStatement":
-            return this.evaluate(node.expression);
-
-        case "IfStatement":
-            return this.executeIf(node);
-
-        case "WhileStatement":
-            return this.executeWhile(node);
-
-        case "ForStatement":
-            return this.executeFor(node);
-
-        case "ReturnStatement":
-            return this.executeReturn(node);
-
-        case "FunctionDeclaration":
-            return this.executeFunction(node);
-
-        default:
+        if (!node || !node.type) {
 
             throw new Error(
-                `Statement '${node.type}' belum didukung.`
+                "AST Node tidak valid."
             );
+
+        }
+
+        switch (node.type) {
+
+            case "VariableDeclaration":
+                return this.executeVariable(node);
+
+            case "PrintStatement":
+                return this.executePrint(node);
+
+            case "ExpressionStatement":
+                return this.evaluate(node.expression);
+
+            case "IfStatement":
+                return this.executeIf(node);
+
+            case "WhileStatement":
+                return this.executeWhile(node);
+
+            case "ForStatement":
+                return this.executeFor(node);
+
+            case "FunctionDeclaration":
+                return this.executeFunction(node);
+
+            case "ReturnStatement":
+                return this.executeReturn(node);
+
+            case "ImportStatement":
+                return this.executeImport(node);
+
+            case "ClassDeclaration":
+                return this.executeClass(node);
+
+            default:
+
+                throw new Error(
+                    `Statement '${node.type}' belum didukung.`
+                );
+
+        }
 
     }
 
-}
-
     // =======================================
-    // Variable
+    // VARIABLE
     // =======================================
 
     executeVariable(node) {
@@ -97,7 +132,7 @@ class Interpreter {
     }
 
     // =======================================
-    // Print
+    // PRINT
     // =======================================
 
     executePrint(node) {
@@ -111,346 +146,316 @@ class Interpreter {
 
     }
 
-// =======================================
-// IF
-// =======================================
+    // =======================================
+    // IF
+    // =======================================
 
-executeIf(node) {
+    executeIf(node) {
 
-    if (this.evaluate(node.condition)) {
+        const condition =
+            this.evaluate(node.condition);
 
-        for (const stmt of node.thenBody) {
+        if (condition) {
 
-            this.execute(stmt);
+            for (const statement of node.thenBody) {
 
-        }
+                this.execute(statement);
 
-        return;
+            }
 
-    }
-
-    if (node.elseBody) {
-
-        for (const stmt of node.elseBody) {
-
-            this.execute(stmt);
+            return;
 
         }
 
-    }
+        if (node.elseBody) {
 
-}
+            for (const statement of node.elseBody) {
 
-// =======================================
-// WHILE
-// =======================================
+                this.execute(statement);
 
-executeWhile(node) {
-
-    while (this.evaluate(node.condition)) {
-
-        for (const stmt of node.body) {
-
-            this.execute(stmt);
+            }
 
         }
 
     }
 
-}
+    // =======================================
+    // WHILE
+    // =======================================
 
-// =======================================
-// FOR
-// =======================================
+    executeWhile(node) {
 
-executeFor(node) {
+        while (
+            this.evaluate(node.condition)
+        ) {
 
-    const start = this.evaluate(node.start);
+            try {
 
-    const end = this.evaluate(node.end);
+                for (const statement of node.body) {
 
-    const step = this.evaluate(node.step);
+                    this.execute(statement);
 
-    for (
+                }
 
-        let i = start;
+            } catch (error) {
 
-        i <= end;
+                if (error instanceof ReturnSignal) {
 
-        i += step
+                    throw error;
 
-    ) {
+                }
+
+                throw error;
+
+            }
+
+        }
+
+    }
+
+    // =======================================
+    // FOR
+    // =======================================
+
+    executeFor(node) {
+
+        const start =
+            this.evaluate(node.start);
+
+        const end =
+            this.evaluate(node.end);
+
+        const step =
+            this.evaluate(node.step);
+
+        if (step === 0) {
+
+            throw new Error(
+                "Loop 'untuk' tidak boleh menggunakan langkah 0."
+            );
+
+        }
+
+        if (step > 0) {
+
+            for (
+                let i = start;
+                i <= end;
+                i += step
+            ) {
+
+                this.globals.set(
+                    node.variable,
+                    i
+                );
+
+                for (const statement of node.body) {
+
+                    this.execute(statement);
+
+                }
+
+            }
+
+        } else {
+
+            for (
+                let i = start;
+                i >= end;
+                i += step
+            ) {
+
+                this.globals.set(
+                    node.variable,
+                    i
+                );
+
+                for (const statement of node.body) {
+
+                    this.execute(statement);
+
+                }
+
+            }
+
+        }
+
+    }
+
+    // =======================================
+    // FUNCTION DECLARATION
+    // =======================================
+
+    executeFunction(node) {
 
         this.globals.set(
-            node.variable,
-            i
+            node.name,
+            node
         );
 
-        for (const stmt of node.body) {
-
-            this.execute(stmt);
-
-        }
+        return node;
 
     }
 
-}
-
-// =======================================
-// RETURN
-// =======================================
-
-executeReturn(node) {
-
-    return this.evaluate(node.value);
-
-}
-
-// =======================================
-// FUNCTION
-// =======================================
-
-executeFunction(node) {
-
-    this.globals.set(
-        node.name,
-        node
-    );
-
-}
-
     // =======================================
-    // Expression Evaluator
+    // RETURN
     // =======================================
 
-        evaluate(node) {
+    executeReturn(node) {
+
+        const value = node.value === null
+            ? null
+            : this.evaluate(node.value);
+
+        throw new ReturnSignal(value);
+
+    }
+
+    // =======================================
+    // IMPORT
+    // =======================================
+
+    executeImport(node) {
+
+        throw new Error(
+            `Import '${node.file}' belum didukung oleh runtime.`
+        );
+
+    }
+
+    // =======================================
+    // CLASS
+    // =======================================
+
+    executeClass(node) {
+
+        const classObject = {
+
+            type: "Class",
+
+            name: node.name,
+
+            body: node.body
+
+        };
+
+        this.globals.set(
+            node.name,
+            classObject
+        );
+
+        return classObject;
+
+    }
+
+    // =======================================
+    // EXPRESSION
+    // =======================================
+
+    evaluate(node) {
+
+        if (!node || !node.type) {
+
+            throw new Error(
+                "Expression AST tidak valid."
+            );
+
+        }
 
         switch (node.type) {
 
-            // ==========================
+            // ===================================
             // Literal
-            // ==========================
+            // ===================================
 
             case "Literal":
+
                 return node.value;
 
-            // ==========================
+            // ===================================
             // Identifier
-            // ==========================
+            // ===================================
 
             case "Identifier":
 
-                if (!this.globals.has(node.name)) {
+                return this.getVariable(
+                    node.name
+                );
 
-                    throw new Error(
-                        `Variabel '${node.name}' belum dibuat.`
-                    );
-
-                }
-
-                return this.globals.get(node.name);
-
-            // ==========================
+            // ===================================
             // Assignment
-            // ==========================
+            // ===================================
 
-            case "AssignmentExpression": {
+            case "AssignmentExpression":
 
-                const value = this.evaluate(node.right);
+                return this.evaluateAssignment(node);
 
-                this.globals.set(
-                    node.left.name,
-                    value
-                );
-
-                return value;
-
-            }
-
-            // ==========================
-            // Unary
-            // ==========================
-
-            case "UnaryExpression": {
-
-                const value =
-                    this.evaluate(node.argument);
-
-                switch (node.operator) {
-
-                    case "MINUS":
-                        return -value;
-
-                    case "NOT":
-                        return !value;
-
-                    default:
-                        throw new Error(
-                            `Operator unary '${node.operator}' tidak dikenal.`
-                        );
-
-                }
-
-            }
-
-            // ==========================
-            // Logical
-            // ==========================
-
-            case "LogicalExpression": {
-
-                const left =
-                    this.evaluate(node.left);
-
-                if (node.operator === "AND") {
-
-                    return left &&
-                        this.evaluate(node.right);
-
-                }
-
-                if (node.operator === "OR") {
-
-                    return left ||
-                        this.evaluate(node.right);
-
-                }
-
-                throw new Error(
-                    "Logical operator tidak dikenal."
-                );
-
-            }
-
-            // ==========================
+            // ===================================
             // Binary
-            // ==========================
+            // ===================================
 
-            case "BinaryExpression": {
+            case "BinaryExpression":
 
-                const left =
-                    this.evaluate(node.left);
+                return this.evaluateBinary(node);
 
-                const right =
-                    this.evaluate(node.right);
+            // ===================================
+            // Logical
+            // ===================================
 
-                switch (node.operator) {
+            case "LogicalExpression":
 
-                    case "PLUS":
-                        return left + right;
+                return this.evaluateLogical(node);
 
-                    case "MINUS":
-                        return left - right;
+            // ===================================
+            // Unary
+            // ===================================
 
-                    case "STAR":
-                        return left * right;
+            case "UnaryExpression":
 
-                    case "SLASH":
-                        return left / right;
+                return this.evaluateUnary(node);
 
-                    case "PERCENT":
-                        return left % right;
-
-                    case "GREATER":
-                        return left > right;
-
-                    case "GREATER_EQUAL":
-                        return left >= right;
-
-                    case "LESS":
-                        return left < right;
-
-                    case "LESS_EQUAL":
-                        return left <= right;
-
-                    case "EQUAL_EQUAL":
-                        return left === right;
-
-                    case "NOT_EQUAL":
-                        return left !== right;
-
-                    default:
-
-                        throw new Error(
-                            `Operator '${node.operator}' belum didukung.`
-                        );
-
-                }
-
-            }
-
-                        // ==========================
+            // ===================================
             // Function Call
-            // ==========================
+            // ===================================
 
-            case "CallExpression": {
+            case "CallExpression":
 
-                // Fungsi yang dipanggil
-                const func = this.evaluate(node.callee);
+                return this.evaluateCall(node);
 
-                // Built-in JavaScript Function
-                if (typeof func === "function") {
+            // ===================================
+            // Member
+            // ===================================
 
-                    const args = node.arguments.map(arg =>
-                        this.evaluate(arg)
-                    );
+            case "MemberExpression":
 
-                    return func(...args);
+                return this.evaluateMember(node);
 
-                }
+            // ===================================
+            // Array
+            // ===================================
 
-                // User-defined Function
-                if (
-                    func &&
-                    func.type === "FunctionDeclaration"
-                ) {
+            case "ArrayExpression":
 
-                    const oldGlobals = new Map(this.globals);
-
-                    // Parameter
-                    for (let i = 0; i < func.params.length; i++) {
-
-                        const value =
-                            i < node.arguments.length
-                                ? this.evaluate(node.arguments[i])
-                                : null;
-
-                        this.globals.set(
-                            func.params[i],
-                            value
-                        );
-
-                    }
-
-                    let returnValue = null;
-
-                    for (const stmt of func.body) {
-
-                        if (
-                            stmt.type === "ReturnStatement"
-                        ) {
-
-                            returnValue =
-                                this.evaluate(stmt.value);
-
-                            break;
-
-                        }
-
-                        this.execute(stmt);
-
-                    }
-
-                    // Restore Scope
-                    this.globals = oldGlobals;
-
-                    return returnValue;
-
-                }
-
-                throw new Error(
-                    "Bukan sebuah fungsi."
+                return node.elements.map(
+                    element => this.evaluate(element)
                 );
+
+            // ===================================
+            // Object
+            // ===================================
+
+            case "ObjectExpression": {
+
+                const object = {};
+
+                for (const property of node.properties) {
+
+                    object[property.key] =
+                        this.evaluate(property.value);
+
+                }
+
+                return object;
 
             }
 
@@ -464,6 +469,354 @@ executeFunction(node) {
 
     }
 
+    // =======================================
+    // VARIABLE LOOKUP
+    // =======================================
+
+    getVariable(name) {
+
+        if (!this.globals.has(name)) {
+
+            throw new Error(
+                `Variabel atau fungsi '${name}' belum dibuat.`
+            );
+
+        }
+
+        return this.globals.get(name);
+
+    }
+
+    // =======================================
+    // ASSIGNMENT
+    // =======================================
+
+    evaluateAssignment(node) {
+
+        const value =
+            this.evaluate(node.right);
+
+        const name =
+            node.left.name;
+
+        if (!this.globals.has(name)) {
+
+            throw new Error(
+                `Variabel '${name}' belum dibuat.`
+            );
+
+        }
+
+        this.globals.set(
+            name,
+            value
+        );
+
+        return value;
+
+    }
+
+    // =======================================
+    // UNARY
+    // =======================================
+
+    evaluateUnary(node) {
+
+        const value =
+            this.evaluate(node.argument);
+
+        switch (node.operator) {
+
+            case "!":
+            case "NOT":
+
+                return !value;
+
+            case "-":
+
+            case "MINUS":
+
+                return -value;
+
+            default:
+
+                throw new Error(
+                    `Operator unary '${node.operator}' tidak dikenal.`
+                );
+
+        }
+
+    }
+
+    // =======================================
+    // LOGICAL
+    // =======================================
+
+    evaluateLogical(node) {
+
+        const left =
+            this.evaluate(node.left);
+
+        if (
+            node.operator === "AND"
+        ) {
+
+            return (
+                left &&
+                this.evaluate(node.right)
+            );
+
+        }
+
+        if (
+            node.operator === "OR"
+        ) {
+
+            return (
+                left ||
+                this.evaluate(node.right)
+            );
+
+        }
+
+        throw new Error(
+            `Operator logical '${node.operator}' tidak dikenal.`
+        );
+
+    }
+
+    // =======================================
+    // BINARY
+    // =======================================
+
+    evaluateBinary(node) {
+
+        const left =
+            this.evaluate(node.left);
+
+        const right =
+            this.evaluate(node.right);
+
+        switch (node.operator) {
+
+            case "+":
+            case "PLUS":
+
+                return left + right;
+
+            case "-":
+            case "MINUS":
+
+                return left - right;
+
+            case "*":
+            case "STAR":
+
+                return left * right;
+
+            case "/":
+            case "SLASH":
+
+                if (right === 0) {
+
+                    throw new Error(
+                        "Tidak bisa membagi dengan 0."
+                    );
+
+                }
+
+                return left / right;
+
+            case "%":
+            case "PERCENT":
+
+                return left % right;
+
+            case ">":
+            case "GREATER":
+
+                return left > right;
+
+            case ">=":
+            case "GREATER_EQUAL":
+
+                return left >= right;
+
+            case "<":
+            case "LESS":
+
+                return left < right;
+
+            case "<=":
+            case "LESS_EQUAL":
+
+                return left <= right;
+
+            case "==":
+            case "EQUAL_EQUAL":
+
+                return left === right;
+
+            case "!=":
+            case "NOT_EQUAL":
+
+                return left !== right;
+
+            default:
+
+                throw new Error(
+                    `Operator '${node.operator}' belum didukung.`
+                );
+
+        }
+
+    }
+
+    // =======================================
+    // FUNCTION CALL
+    // =======================================
+
+    evaluateCall(node) {
+
+        const func =
+            this.evaluate(node.callee);
+
+        const args =
+            node.arguments.map(
+                argument => this.evaluate(argument)
+            );
+
+        // Built-in / standard library
+        if (typeof func === "function") {
+
+            return func(...args);
+
+        }
+
+        // User-defined function
+        if (
+            func &&
+            func.type === "FunctionDeclaration"
+        ) {
+
+            return this.callFunction(
+                func,
+                args
+            );
+
+        }
+
+        throw new Error(
+            "Objek yang dipanggil bukan sebuah fungsi."
+        );
+
+    }
+
+    // =======================================
+    // CALL USER FUNCTION
+    // =======================================
+
+    callFunction(func, args) {
+
+        const previousGlobals =
+            this.globals;
+
+        const localScope =
+            new Map(previousGlobals);
+
+        this.globals =
+            localScope;
+
+        try {
+
+            for (
+                let i = 0;
+                i < func.params.length;
+                i++
+            ) {
+
+                const parameter =
+                    func.params[i];
+
+                const value =
+                    i < args.length
+                        ? args[i]
+                        : null;
+
+                this.globals.set(
+                    parameter,
+                    value
+                );
+
+            }
+
+            for (const statement of func.body) {
+
+                this.execute(statement);
+
+            }
+
+            return null;
+
+        } catch (error) {
+
+            if (error instanceof ReturnSignal) {
+
+                return error.value;
+
+            }
+
+            throw error;
+
+        } finally {
+
+            this.globals =
+                previousGlobals;
+
+        }
+
+    }
+
+    // =======================================
+    // MEMBER ACCESS
+    // =======================================
+
+    evaluateMember(node) {
+
+        const object =
+            this.evaluate(node.object);
+
+        if (object === null ||
+            object === undefined) {
+
+            throw new Error(
+                "Tidak bisa mengakses property dari nilai kosong."
+            );
+
+        }
+
+        let property;
+
+        if (node.computed) {
+
+            property =
+                this.evaluate(node.property);
+
+        } else {
+
+            property =
+                node.property.name;
+
+        }
+
+        return object[property];
+
+    }
+
 }
+
+// =======================================
+// Export
+// =======================================
 
 module.exports = Interpreter;

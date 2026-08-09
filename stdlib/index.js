@@ -1,27 +1,30 @@
-const matematika = require("./matematika");
-const teks = require("./teks");
-const waktu = require("./waktu");
+// =======================================
+// Bahasa Indonesia Programming Language
+// Standard Library
+// =======================================
+
 const acak = require("./acak");
 const array = require("./array");
-const file = require("./file");
-const sistem = require("./sistem");
-
-const json = require("./json");
-const http = require("./http");
 const database = require("./database");
+const file = require("./file");
+const http = require("./http");
+const json = require("./json");
+const matematika = require("./matematika");
+const sistem = require("./sistem");
+const teks = require("./teks");
+const waktu = require("./waktu");
 
 module.exports = {
 
-    ...matematika,
-    ...teks,
-    ...waktu,
     ...acak,
     ...array,
+    ...database,
     ...file,
-    ...sistem,
-
-    ...json,
     ...http,
-    ...database
+    ...json,
+    ...matematika,
+    ...sistem,
+    ...teks,
+    ...waktu
 
 };

@@ -1,5 +1,13 @@
 // =======================================
 // Bahasa Indonesia Programming Language
+// Lexer v2
+// =======================================
+
+const KEYWORDS = require("./keywords");
+
+
+// =======================================
+// Token
 // =======================================
 
 class Token {
@@ -13,78 +21,17 @@ class Token {
 
     }
 
+    toString() {
+
+        return `${this.type}(${JSON.stringify(this.value)})`;
+
+    }
+
 }
 
-// =======================================
-// KEYWORDS
-// =======================================
-
-const KEYWORDS = {
-
-    // Variabel
-    "buat": "VAR",
-    "bikin": "VAR",
-
-    // Output
-    "tampilkan": "PRINT",
-    "tampilin": "PRINT",
-
-    // Kondisional
-    "jika": "IF",
-    "kalo": "IF",
-
-    "maka": "THEN",
-    "ya": "THEN",
-
-    "lain": "ELSE",
-    "else": "ELSE",
-
-    "selesai": "END",
-    "udah": "END",
-
-    // Function
-    "fungsi": "FUNCTION",
-    "bikinfungsi": "FUNCTION",
-
-    "kembali": "RETURN",
-    "balikin": "RETURN",
-
-    // Loop
-    "untuk": "FOR",
-    "dari": "FROM",
-    "sampai": "TO",
-    "sampe": "TO",
-
-    "langkah": "STEP",
-
-    "lakukan": "DO",
-
-    "selama": "WHILE",
-    "selagi": "WHILE",
-
-    // Class
-    "kelas": "CLASS",
-
-    // Import
-    "pakai": "IMPORT",
-    "ambil": "IMPORT",
-
-    // Logical
-    "dan": "AND",
-    "atau": "OR",
-    "tidak": "NOT",
-
-    // Boolean
-    "benar": "BOOLEAN",
-    "salah": "BOOLEAN",
-
-    // Null
-    "kosong": "NULL"
-
-};
 
 // =======================================
-// LEXER
+// Lexer
 // =======================================
 
 class Lexer {
@@ -101,13 +48,17 @@ class Lexer {
 
     }
 
-    // --------------------
+
+    // ===================================
+    // Navigation
+    // ===================================
 
     current() {
 
         return this.source[this.position];
 
     }
+
 
     peek(offset = 1) {
 
@@ -117,15 +68,22 @@ class Lexer {
 
     }
 
+
     eof() {
 
-        return this.position >= this.source.length;
+        return (
+            this.position >=
+            this.source.length
+        );
 
     }
 
+
     advance() {
 
-        if (this.current() === "\n") {
+        const char = this.current();
+
+        if (char === "\n") {
 
             this.line++;
             this.column = 1;
@@ -138,55 +96,94 @@ class Lexer {
 
         this.position++;
 
+        return char;
+
     }
 
-    createToken(type, value) {
 
-        return new Token(
-            type,
-            value,
-            this.line,
-            this.column
+    // ===================================
+    // Character Helpers
+    // ===================================
+
+    isWhitespace(char) {
+
+        return (
+            char === " " ||
+            char === "\t" ||
+            char === "\r" ||
+            char === "\n"
         );
 
     }
 
-    // --------------------
-
-    isWhitespace(char) {
-
-        return /\s/.test(char);
-
-    }
-
-    isLetter(char) {
-
-        return /[A-Za-z_]/.test(char);
-
-    }
 
     isDigit(char) {
 
-        return /[0-9]/.test(char);
+        return (
+            char !== undefined &&
+            /[0-9]/.test(char)
+        );
 
     }
+
+
+    isLetter(char) {
+
+        return (
+            char !== undefined &&
+            /[A-Za-z_]/.test(char)
+        );
+
+    }
+
 
     isAlphaNumeric(char) {
 
-        return /[A-Za-z0-9_]/.test(char);
+        return (
+            char !== undefined &&
+            /[A-Za-z0-9_]/.test(char)
+        );
 
     }
 
-        // =======================================
-    // Skip Whitespace
-    // =======================================
+
+    // ===================================
+    // Token
+    // ===================================
+
+    makeToken(
+        type,
+        value,
+        line = this.line,
+        column = this.column
+    ) {
+
+        return new Token(
+            type,
+            value,
+            line,
+            column
+        );
+
+    }
+
+
+    // ===================================
+    // Whitespace
+    // ===================================
 
     skipWhitespace() {
 
-        while (
-            !this.eof() &&
-            this.isWhitespace(this.current())
-        ) {
+        while (!this.eof()) {
+
+            const char =
+                this.current();
+
+            if (!this.isWhitespace(char)) {
+
+                break;
+
+            }
 
             this.advance();
 
@@ -194,14 +191,20 @@ class Lexer {
 
     }
 
-    // =======================================
-    // Skip Comment
-    // =======================================
+
+    // ===================================
+    // Comments
+    // ===================================
 
     skipComment() {
 
+        // -------------------------------
         // #
-        if (this.current() === "#") {
+        // -------------------------------
+
+        if (
+            this.current() === "#"
+        ) {
 
             while (
                 !this.eof() &&
@@ -216,12 +219,19 @@ class Lexer {
 
         }
 
+
+        // -------------------------------
         // //
+        // -------------------------------
+
         if (
             this.current() === "/" &&
             this.peek() === "/"
         ) {
 
+            this.advance();
+            this.advance();
+
             while (
                 !this.eof() &&
                 this.current() !== "\n"
@@ -235,11 +245,21 @@ class Lexer {
 
         }
 
+
+        // -------------------------------
         // /* ... */
+        // -------------------------------
+
         if (
             this.current() === "/" &&
             this.peek() === "*"
         ) {
+
+            const startLine =
+                this.line;
+
+            const startColumn =
+                this.column;
 
             this.advance();
             this.advance();
@@ -263,87 +283,164 @@ class Lexer {
             }
 
             throw new Error(
-                `Komentar belum ditutup (${this.line}:${this.column})`
+                `Lexer Error (${startLine}:${startColumn}) ` +
+                `Komentar multiline belum ditutup.`
             );
 
         }
+
 
         return false;
 
     }
 
-    // =======================================
-    // Read Number
-    // =======================================
+
+    // ===================================
+    // Number
+    // ===================================
 
     readNumber() {
 
-        const line = this.line;
-        const column = this.column;
+        const line =
+            this.line;
 
-        let value = "";
+        const column =
+            this.column;
+
+        let text = "";
+
         let hasDot = false;
+
 
         while (!this.eof()) {
 
-            const ch = this.current();
+            const char =
+                this.current();
 
-            if (this.isDigit(ch)) {
 
-                value += ch;
+            if (this.isDigit(char)) {
+
+                text += char;
+
                 this.advance();
+
                 continue;
 
             }
 
-            if (ch === "." && !hasDot) {
+
+            if (
+                char === "." &&
+                !hasDot &&
+                this.isDigit(this.peek())
+            ) {
 
                 hasDot = true;
-                value += ".";
+
+                text += char;
+
                 this.advance();
+
                 continue;
 
             }
+
 
             break;
 
         }
 
-        return new Token(
+
+        const value =
+            Number(text);
+
+
+        if (Number.isNaN(value)) {
+
+            throw new Error(
+                `Lexer Error (${line}:${column}) ` +
+                `Angka '${text}' tidak valid.`
+            );
+
+        }
+
+
+        return this.makeToken(
             "NUMBER",
-            Number(value),
+            value,
             line,
             column
         );
 
     }
 
-    // =======================================
-    // Read String
-    // =======================================
+
+    // ===================================
+    // String
+    // ===================================
 
     readString() {
 
-        const quote = this.current();
+        const quote =
+            this.current();
 
-        const line = this.line;
-        const column = this.column;
+        const line =
+            this.line;
+
+        const column =
+            this.column;
 
         this.advance();
 
+
         let value = "";
+
 
         while (!this.eof()) {
 
-            const ch = this.current();
+            const char =
+                this.current();
 
-            if (ch === "\\") {
+
+            // ---------------------------
+            // String selesai
+            // ---------------------------
+
+            if (char === quote) {
 
                 this.advance();
 
-                if (this.eof()) break;
+                return this.makeToken(
+                    "STRING",
+                    value,
+                    line,
+                    column
+                );
 
-                switch (this.current()) {
+            }
+
+
+            // ---------------------------
+            // Escape
+            // ---------------------------
+
+            if (char === "\\") {
+
+                this.advance();
+
+
+                if (this.eof()) {
+
+                    break;
+
+                }
+
+
+                const escaped =
+                    this.current();
+
+
+                switch (escaped) {
 
                     case "n":
                         value += "\n";
@@ -361,8 +458,8 @@ class Lexer {
                         value += "\\";
                         break;
 
-                    case '"':
-                        value += '"';
+                    case "\"":
+                        value += "\"";
                         break;
 
                     case "'":
@@ -370,9 +467,13 @@ class Lexer {
                         break;
 
                     default:
-                        value += this.current();
+
+                        value += escaped;
+
+                        break;
 
                 }
+
 
                 this.advance();
 
@@ -380,58 +481,81 @@ class Lexer {
 
             }
 
-            if (ch === quote) {
 
-                this.advance();
+            // ---------------------------
+            // Newline dalam string
+            // ---------------------------
 
-                return new Token(
-                    "STRING",
-                    value,
-                    line,
-                    column
+            if (char === "\n") {
+
+                throw new Error(
+                    `Lexer Error (${line}:${column}) ` +
+                    `String belum ditutup.`
                 );
 
             }
 
-            value += ch;
+
+            value += char;
+
             this.advance();
 
         }
 
+
         throw new Error(
-            `String belum ditutup (${line}:${column})`
+            `Lexer Error (${line}:${column}) ` +
+            `String belum ditutup.`
         );
 
     }
 
-    // =======================================
-    // Read Identifier
-    // =======================================
+
+    // ===================================
+    // Identifier / Keyword
+    // ===================================
 
     readIdentifier() {
 
-        const line = this.line;
-        const column = this.column;
+        const line =
+            this.line;
+
+        const column =
+            this.column;
 
         let value = "";
 
+
         while (
             !this.eof() &&
-            this.isAlphaNumeric(this.current())
+            this.isAlphaNumeric(
+                this.current()
+            )
         ) {
 
             value += this.current();
+
             this.advance();
 
         }
 
-        if (Object.hasOwn(KEYWORDS, value)) {
 
-            const type = KEYWORDS[value];
+        // -------------------------------
+        // Keyword
+        // -------------------------------
 
-            if (type === "BOOLEAN") {
+        const keywordType =
+            KEYWORDS[value];
 
-                return new Token(
+
+        if (keywordType) {
+
+            // Boolean
+            if (
+                keywordType === "BOOLEAN"
+            ) {
+
+                return this.makeToken(
                     "BOOLEAN",
                     value === "benar",
                     line,
@@ -440,9 +564,13 @@ class Lexer {
 
             }
 
-            if (type === "NULL") {
 
-                return new Token(
+            // Null
+            if (
+                keywordType === "NULL"
+            ) {
+
+                return this.makeToken(
                     "NULL",
                     null,
                     line,
@@ -451,8 +579,9 @@ class Lexer {
 
             }
 
-            return new Token(
-                type,
+
+            return this.makeToken(
+                keywordType,
                 value,
                 line,
                 column
@@ -460,7 +589,12 @@ class Lexer {
 
         }
 
-        return new Token(
+
+        // -------------------------------
+        // Identifier
+        // -------------------------------
+
+        return this.makeToken(
             "IDENTIFIER",
             value,
             line,
@@ -469,170 +603,353 @@ class Lexer {
 
     }
 
-    // =======================================
-// TOKENIZER
-// =======================================
 
-tokenize() {
+    // ===================================
+    // Operator
+    // ===================================
 
-    const tokens = [];
+    readOperator() {
 
-    const tokenMap = {
+        const line =
+            this.line;
 
-        // Operator
-        "==": "EQUAL_EQUAL",
-        "!=": "NOT_EQUAL",
+        const column =
+            this.column;
 
-        ">=": "GREATER_EQUAL",
-        "<=": "LESS_EQUAL",
+        const two =
+            this.current() +
+            this.peek();
 
-        "&&": "AND",
-        "||": "OR",
 
-        "=": "ASSIGN",
+        // ===============================
+        // Two-character operators
+        // ===============================
 
-        "+": "PLUS",
-        "-": "MINUS",
-        "*": "STAR",
-        "/": "SLASH",
-        "%": "PERCENT",
+        const doubleOperators = {
 
-        ">": "GREATER",
-        "<": "LESS",
+            "==": "EQUAL_EQUAL",
 
-        "!": "NOT",
+            "!=": "NOT_EQUAL",
 
-        // Symbol
-        "(": "LEFT_PAREN",
-        ")": "RIGHT_PAREN",
+            ">=": "GREATER_EQUAL",
 
-        "{": "LEFT_BRACE",
-        "}": "RIGHT_BRACE",
+            "<=": "LESS_EQUAL",
 
-        "[": "LEFT_BRACKET",
-        "]": "RIGHT_BRACKET",
+            "&&": "AND",
 
-        ",": "COMMA",
-        ".": "DOT",
+            "||": "OR"
 
-        ":": "COLON",
-        ";": "SEMICOLON"
+        };
 
-    };
-
-    const sorted = Object.keys(tokenMap)
-        .sort((a, b) => b.length - a.length);
-
-    while (!this.eof()) {
-
-        if (this.isWhitespace(this.current())) {
-            this.skipWhitespace();
-            continue;
-        }
-
-        if (this.skipComment()) {
-            continue;
-        }
-
-        if (this.isDigit(this.current())) {
-            tokens.push(this.readNumber());
-            continue;
-        }
 
         if (
-            this.current() === '"' ||
-            this.current() === "'"
+            doubleOperators[two]
         ) {
-            tokens.push(this.readString());
-            continue;
-        }
 
-        if (this.isLetter(this.current())) {
-            tokens.push(this.readIdentifier());
-            continue;
-        }
+            this.advance();
+            this.advance();
 
-        let found = false;
-
-        for (const symbol of sorted) {
-
-            if (
-                this.source.startsWith(
-                    symbol,
-                    this.position
-                )
-            ) {
-
-                tokens.push(
-
-                    new Token(
-
-                        tokenMap[symbol],
-
-                        symbol,
-
-                        this.line,
-
-                        this.column
-
-                    )
-
-                );
-
-                for (
-                    let i = 0;
-                    i < symbol.length;
-                    i++
-                ) {
-
-                    this.advance();
-
-                }
-
-                found = true;
-                break;
-
-            }
+            return this.makeToken(
+                doubleOperators[two],
+                two,
+                line,
+                column
+            );
 
         }
 
-        if (found)
-            continue;
 
-        throw new Error(
+        // ===============================
+        // Single-character operators
+        // ===============================
 
-            `Lexer Error (${this.line}:${this.column}) Karakter '${this.current()}' tidak dikenali.`
+        const operators = {
 
+            "=": "ASSIGN",
+
+            "+": "PLUS",
+
+            "-": "MINUS",
+
+            "*": "STAR",
+
+            "/": "SLASH",
+
+            "%": "PERCENT",
+
+            ">": "GREATER",
+
+            "<": "LESS",
+
+            "!": "NOT"
+
+        };
+
+
+        const type =
+            operators[this.current()];
+
+
+        if (type) {
+
+            const value =
+                this.current();
+
+            this.advance();
+
+            return this.makeToken(
+                type,
+                value,
+                line,
+                column
+            );
+
+        }
+
+
+        return null;
+
+    }
+
+
+    // ===================================
+    // Symbol
+    // ===================================
+
+    readSymbol() {
+
+        const line =
+            this.line;
+
+        const column =
+            this.column;
+
+        const symbols = {
+
+            "(": "LEFT_PAREN",
+
+            ")": "RIGHT_PAREN",
+
+            "{": "LEFT_BRACE",
+
+            "}": "RIGHT_BRACE",
+
+            "[": "LEFT_BRACKET",
+
+            "]": "RIGHT_BRACKET",
+
+            ",": "COMMA",
+
+            ".": "DOT",
+
+            ":": "COLON",
+
+            ";": "SEMICOLON"
+
+        };
+
+
+        const char =
+            this.current();
+
+        const type =
+            symbols[char];
+
+
+        if (!type) {
+
+            return null;
+
+        }
+
+
+        this.advance();
+
+
+        return this.makeToken(
+            type,
+            char,
+            line,
+            column
         );
 
     }
 
-    tokens.push(
 
-        new Token(
-            "EOF",
-            null,
-            this.line,
-            this.column
-        )
+    // ===================================
+    // Main Tokenizer
+    // ===================================
 
-    );
+    tokenize() {
 
-    return tokens;
+        const tokens = [];
+
+
+        while (!this.eof()) {
+
+            // ---------------------------
+            // Whitespace
+            // ---------------------------
+
+            if (
+                this.isWhitespace(
+                    this.current()
+                )
+            ) {
+
+                this.skipWhitespace();
+
+                continue;
+
+            }
+
+
+            // ---------------------------
+            // Comment
+            // ---------------------------
+
+            if (
+                this.skipComment()
+            ) {
+
+                continue;
+
+            }
+
+
+            // ---------------------------
+            // Number
+            // ---------------------------
+
+            if (
+                this.isDigit(
+                    this.current()
+                )
+            ) {
+
+                tokens.push(
+                    this.readNumber()
+                );
+
+                continue;
+
+            }
+
+
+            // ---------------------------
+            // String
+            // ---------------------------
+
+            if (
+                this.current() === "\"" ||
+                this.current() === "'"
+            ) {
+
+                tokens.push(
+                    this.readString()
+                );
+
+                continue;
+
+            }
+
+
+            // ---------------------------
+            // Identifier
+            // ---------------------------
+
+            if (
+                this.isLetter(
+                    this.current()
+                )
+            ) {
+
+                tokens.push(
+                    this.readIdentifier()
+                );
+
+                continue;
+
+            }
+
+
+            // ---------------------------
+            // Operator
+            // ---------------------------
+
+            const operator =
+                this.readOperator();
+
+
+            if (operator) {
+
+                tokens.push(operator);
+
+                continue;
+
+            }
+
+
+            // ---------------------------
+            // Symbol
+            // ---------------------------
+
+            const symbol =
+                this.readSymbol();
+
+
+            if (symbol) {
+
+                tokens.push(symbol);
+
+                continue;
+
+            }
+
+
+            // ---------------------------
+            // Unknown
+            // ---------------------------
+
+            throw new Error(
+
+                `Lexer Error (${this.line}:${this.column}) ` +
+                `Karakter '${this.current()}' tidak dikenali.`
+
+            );
+
+        }
+
+
+        // =================================
+        // EOF
+        // =================================
+
+        tokens.push(
+
+            this.makeToken(
+                "EOF",
+                null
+            )
+
+        );
+
+
+        return tokens;
+
+    }
 
 }
 
-}
 
 // =======================================
-
+// Export
+// =======================================
 
 module.exports = {
 
     Lexer,
 
-    Token,
-
-    KEYWORDS
+    Token
 
 };

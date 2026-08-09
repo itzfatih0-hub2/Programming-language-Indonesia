@@ -8,30 +8,30 @@ class Parser {
     constructor(tokens) {
 
         this.tokens = tokens;
-        this.position = 0;
+        this.currentIndex = 0;
 
     }
 
     // =======================================
-    // Helper
+    // NAVIGATION
     // =======================================
 
     current() {
 
-        return this.tokens[this.position];
+        return this.tokens[this.currentIndex];
 
     }
 
     previous() {
 
-        return this.tokens[this.position - 1];
+        return this.tokens[this.currentIndex - 1];
 
     }
 
     peek(offset = 1) {
 
         return this.tokens[
-            this.position + offset
+            this.currentIndex + offset
         ];
 
     }
@@ -46,7 +46,7 @@ class Parser {
 
         if (!this.isAtEnd()) {
 
-            this.position++;
+            this.currentIndex++;
 
         }
 
@@ -54,26 +54,46 @@ class Parser {
 
     }
 
-    check(type) {
+    // =======================================
+    // TOKEN CHECKING
+    // =======================================
 
-        if (this.isAtEnd())
+    check(type, value = null) {
+
+        if (this.isAtEnd()) {
+
+            return type === "EOF";
+
+        }
+
+        const token = this.current();
+
+        if (token.type !== type) {
+
             return false;
 
-        return this.current().type === type;
+        }
+
+        if (
+            value !== null &&
+            token.value !== value
+        ) {
+
+            return false;
+
+        }
+
+        return true;
 
     }
 
-    match(...types) {
+    match(type, value = null) {
 
-        for (const type of types) {
+        if (this.check(type, value)) {
 
-            if (this.check(type)) {
+            this.advance();
 
-                this.advance();
-
-                return true;
-
-            }
+            return true;
 
         }
 
@@ -81,31 +101,38 @@ class Parser {
 
     }
 
-    expect(type) {
+    expect(type, value = null) {
 
-        if (this.check(type))
+        if (this.check(type, value)) {
+
             return this.advance();
+
+        }
 
         const token = this.current();
 
+        const expected =
+            value !== null
+                ? `${type} '${value}'`
+                : type;
+
         throw new Error(
 
-            `Parser Error (${token.line}:${token.column})
-
-Diharapkan:
-
-${type}
-
-Tetapi mendapat:
-
-${token.type}`
+            `Parser Error (${token.line}:${token.column})\n` +
+            `Diharapkan ${expected}, ` +
+            `tetapi mendapat ${token.type}` +
+            (
+                token.value !== null
+                    ? ` '${token.value}'`
+                    : ""
+            )
 
         );
 
     }
 
     // =======================================
-    // Program
+    // PROGRAM
     // =======================================
 
     parse() {
@@ -113,6 +140,13 @@ ${token.type}`
         const body = [];
 
         while (!this.isAtEnd()) {
+
+            // Izinkan ; sebagai pemisah statement
+            if (this.match("SEMICOLON")) {
+
+                continue;
+
+            }
 
             body.push(
                 this.parseStatement()
@@ -131,65 +165,96 @@ ${token.type}`
     }
 
     // =======================================
-    // Statement Dispatcher
+    // STATEMENT
     // =======================================
 
     parseStatement() {
 
-        if (this.match("VAR"))
+        if (this.match("VAR")) {
+
             return this.parseVariable();
 
-        if (this.match("PRINT"))
+        }
+
+        if (this.match("PRINT")) {
+
             return this.parsePrint();
 
-        if (this.match("IF"))
+        }
+
+        if (this.match("IF")) {
+
             return this.parseIf();
 
-        if (this.match("FUNCTION"))
-            return this.parseFunction();
+        }
 
-        if (this.match("RETURN"))
-            return this.parseReturn();
+        if (this.match("WHILE")) {
 
-        if (this.match("FOR"))
-            return this.parseFor();
-
-        if (this.match("WHILE"))
             return this.parseWhile();
 
-        if (this.match("CLASS"))
+        }
+
+        if (this.match("FOR")) {
+
+            return this.parseFor();
+
+        }
+
+        if (this.match("FUNCTION")) {
+
+            return this.parseFunction();
+
+        }
+
+        if (this.match("RETURN")) {
+
+            return this.parseReturn();
+
+        }
+
+        if (this.match("CLASS")) {
+
             return this.parseClass();
 
-        if (this.match("IMPORT"))
+        }
+
+        if (this.match("IMPORT")) {
+
             return this.parseImport();
+
+        }
 
         return this.parseExpressionStatement();
 
     }
 
-        // =======================================
-    // Variable
+    // =======================================
+    // VARIABLE
     // =======================================
 
     parseVariable() {
 
-        const identifier = this.expect("IDENTIFIER");
+        const identifier = {
+
+            type: "Identifier",
+
+            name:
+                this.expect("IDENTIFIER").value
+
+        };
 
         this.expect("ASSIGN");
 
-        const initializer = this.parseExpression();
+        const initializer =
+            this.parseExpression();
+
+        this.match("SEMICOLON");
 
         return {
 
             type: "VariableDeclaration",
 
-            identifier: {
-
-                type: "Identifier",
-
-                name: identifier.value
-
-            },
+            identifier,
 
             initializer
 
@@ -198,455 +263,55 @@ ${token.type}`
     }
 
     // =======================================
-    // Print
+    // PRINT
     // =======================================
 
     parsePrint() {
+
+        const value =
+            this.parseExpression();
+
+        this.match("SEMICOLON");
 
         return {
 
             type: "PrintStatement",
 
-            value: this.parseExpression()
+            value
 
         };
 
     }
 
     // =======================================
-    // Expression Statement
+    // EXPRESSION STATEMENT
     // =======================================
 
     parseExpressionStatement() {
+
+        const expression =
+            this.parseExpression();
+
+        this.match("SEMICOLON");
 
         return {
 
             type: "ExpressionStatement",
 
-            expression: this.parseExpression()
+            expression
 
         };
 
     }
 
     // =======================================
-    // Expression Entry
-    // =======================================
-
-    parseExpression() {
-
-        return this.parseAssignment();
-
-    }
-
-        // =======================================
-    // Assignment
-    // =======================================
-
-    parseAssignment() {
-
-        let expr = this.parseLogicalOr();
-
-        if (this.match("ASSIGN")) {
-
-            if (expr.type !== "Identifier") {
-
-                throw new Error(
-                    "Target assignment harus berupa Identifier."
-                );
-
-            }
-
-            return {
-
-                type: "AssignmentExpression",
-
-                left: expr,
-
-                right: this.parseAssignment()
-
-            };
-
-        }
-
-        return expr;
-
-    }
-
-    // =======================================
-    // Logical OR
-    // =======================================
-
-    parseLogicalOr() {
-
-        let expr = this.parseLogicalAnd();
-
-        while (
-            this.match("OR")
-        ) {
-
-            expr = {
-
-                type: "LogicalExpression",
-
-                operator: "OR",
-
-                left: expr,
-
-                right: this.parseLogicalAnd()
-
-            };
-
-        }
-
-        return expr;
-
-    }
-
-    // =======================================
-    // Logical AND
-    // =======================================
-
-    parseLogicalAnd() {
-
-        let expr = this.parseEquality();
-
-        while (
-            this.match("AND")
-        ) {
-
-            expr = {
-
-                type: "LogicalExpression",
-
-                operator: "AND",
-
-                left: expr,
-
-                right: this.parseEquality()
-
-            };
-
-        }
-
-        return expr;
-
-    }
-
-    // =======================================
-    // Equality
-    // =======================================
-
-    parseEquality() {
-
-        let expr = this.parseComparison();
-
-        while (
-            this.match("EQUAL_EQUAL") ||
-            this.match("NOT_EQUAL")
-        ) {
-
-            const operator =
-                this.previous().type;
-
-            expr = {
-
-                type: "BinaryExpression",
-
-                operator,
-
-                left: expr,
-
-                right: this.parseComparison()
-
-            };
-
-        }
-
-        return expr;
-
-    }
-
-    // =======================================
-    // Comparison
-    // =======================================
-
-    parseComparison() {
-
-        let expr = this.parseTerm();
-
-        while (
-
-            this.match("GREATER") ||
-
-            this.match("GREATER_EQUAL") ||
-
-            this.match("LESS") ||
-
-            this.match("LESS_EQUAL")
-
-        ) {
-
-            const operator =
-                this.previous().type;
-
-            expr = {
-
-                type: "BinaryExpression",
-
-                operator,
-
-                left: expr,
-
-                right: this.parseTerm()
-
-            };
-
-        }
-
-        return expr;
-
-    }
-
-        // =======================================
-    // Term (+ dan -)
-    // =======================================
-
-    parseTerm() {
-
-        let expr = this.parseFactor();
-
-        while (
-            this.match("PLUS") ||
-            this.match("MINUS")
-        ) {
-
-            const operator = this.previous().type;
-
-            expr = {
-
-                type: "BinaryExpression",
-
-                operator,
-
-                left: expr,
-
-                right: this.parseFactor()
-
-            };
-
-        }
-
-        return expr;
-
-    }
-
-    // =======================================
-    // Factor (* / %)
-    // =======================================
-
-    parseFactor() {
-
-        let expr = this.parseUnary();
-
-        while (
-            this.match("STAR") ||
-            this.match("SLASH") ||
-            this.match("PERCENT")
-        ) {
-
-            const operator = this.previous().type;
-
-            expr = {
-
-                type: "BinaryExpression",
-
-                operator,
-
-                left: expr,
-
-                right: this.parseUnary()
-
-            };
-
-        }
-
-        return expr;
-
-    }
-
-    // =======================================
-    // Unary
-    // =======================================
-
-    parseUnary() {
-
-        if (
-            this.match("NOT") ||
-            this.match("MINUS")
-        ) {
-
-            const operator = this.previous().type;
-
-            return {
-
-                type: "UnaryExpression",
-
-                operator,
-
-                argument: this.parseUnary()
-
-            };
-
-        }
-
-        return this.parseCall();
-
-    }
-
-    // =======================================
-    // Function Call
-    // =======================================
-
-    parseCall() {
-
-        let expr = this.parsePrimary();
-
-        while (true) {
-
-            if (this.match("LEFT_PAREN")) {
-
-                const args = [];
-
-                if (!this.check("RIGHT_PAREN")) {
-
-                    do {
-
-                        args.push(
-                            this.parseExpression()
-                        );
-
-                    } while (
-                        this.match("COMMA")
-                    );
-
-                }
-
-                this.expect("RIGHT_PAREN");
-
-                expr = {
-
-                    type: "CallExpression",
-
-                    callee: expr,
-
-                    arguments: args
-
-                };
-
-                continue;
-
-            }
-
-            break;
-
-        }
-
-        return expr;
-
-    }
-
-    // =======================================
-    // Primary
-    // =======================================
-
-    parsePrimary() {
-
-        if (this.match("NUMBER")) {
-
-            return {
-
-                type: "Literal",
-
-                value: this.previous().value
-
-            };
-
-        }
-
-        if (this.match("STRING")) {
-
-            return {
-
-                type: "Literal",
-
-                value: this.previous().value
-
-            };
-
-        }
-
-        if (this.match("BOOLEAN")) {
-
-            return {
-
-                type: "Literal",
-
-                value: this.previous().value
-
-            };
-
-        }
-
-        if (this.match("NULL")) {
-
-            return {
-
-                type: "Literal",
-
-                value: null
-
-            };
-
-        }
-
-        if (this.match("IDENTIFIER")) {
-
-            return {
-
-                type: "Identifier",
-
-                name: this.previous().value
-
-            };
-
-        }
-
-        if (this.match("LEFT_PAREN")) {
-
-            const expr = this.parseExpression();
-
-            this.expect("RIGHT_PAREN");
-
-            return expr;
-
-        }
-
-        const token = this.current();
-
-        throw new Error(
-            `Expression tidak valid pada ${token.type} (${token.line}:${token.column})`
-        );
-
-    }
-
-        // =======================================
-    // IF Statement
+    // IF
     // =======================================
 
     parseIf() {
 
-        const condition = this.parseExpression();
+        const condition =
+            this.parseExpression();
 
         this.expect("THEN");
 
@@ -685,6 +350,8 @@ ${token.type}`
 
         this.expect("END");
 
+        this.match("SEMICOLON");
+
         return {
 
             type: "IfStatement",
@@ -694,108 +361,6 @@ ${token.type}`
             thenBody,
 
             elseBody
-
-        };
-
-    }
-
-    // =======================================
-    // RETURN Statement
-    // =======================================
-
-    parseReturn() {
-
-        let value = null;
-
-        if (
-            !this.check("END") &&
-            !this.isAtEnd()
-        ) {
-
-            value = this.parseExpression();
-
-        }
-
-        return {
-
-            type: "ReturnStatement",
-
-            value
-
-        };
-
-    }
-
-    // =======================================
-    // IMPORT Statement
-    // =======================================
-
-    parseImport() {
-
-        const moduleName = this.expect(
-            "IDENTIFIER"
-        );
-
-        return {
-
-            type: "ImportDeclaration",
-
-            module: moduleName.value
-
-        };
-
-    }
-
-        // =======================================
-    // FUNCTION
-    // =======================================
-
-    parseFunction() {
-
-        const name = this.expect("IDENTIFIER").value;
-
-        this.expect("LEFT_PAREN");
-
-        const params = [];
-
-        if (!this.check("RIGHT_PAREN")) {
-
-            do {
-
-                params.push(
-                    this.expect("IDENTIFIER").value
-                );
-
-            } while (this.match("COMMA"));
-
-        }
-
-        this.expect("RIGHT_PAREN");
-
-        const body = [];
-
-        while (
-            !this.check("END") &&
-            !this.isAtEnd()
-        ) {
-
-            body.push(
-                this.parseStatement()
-            );
-
-        }
-
-        this.expect("END");
-
-        return {
-
-            type: "FunctionDeclaration",
-
-            name,
-
-            params,
-
-            body
 
         };
 
@@ -826,6 +391,8 @@ ${token.type}`
         }
 
         this.expect("END");
+
+        this.match("SEMICOLON");
 
         return {
 
@@ -890,6 +457,8 @@ ${token.type}`
 
         this.expect("END");
 
+        this.match("SEMICOLON");
+
         return {
 
             type: "ForStatement",
@@ -903,6 +472,126 @@ ${token.type}`
             step,
 
             body
+
+        };
+
+    }
+
+    // =======================================
+    // FUNCTION
+    // =======================================
+
+    parseFunction() {
+
+        const name =
+            this.expect("IDENTIFIER").value;
+
+        this.expect("LEFT_PAREN");
+
+        const params = [];
+
+        if (!this.check("RIGHT_PAREN")) {
+
+            do {
+
+                params.push(
+                    this.expect("IDENTIFIER").value
+                );
+
+            } while (
+                this.match("COMMA")
+            );
+
+        }
+
+        this.expect("RIGHT_PAREN");
+
+        const body = [];
+
+        while (
+            !this.check("END") &&
+            !this.isAtEnd()
+        ) {
+
+            body.push(
+                this.parseStatement()
+            );
+
+        }
+
+        this.expect("END");
+
+        this.match("SEMICOLON");
+
+        return {
+
+            type: "FunctionDeclaration",
+
+            name,
+
+            params,
+
+            body
+
+        };
+
+    }
+
+    // =======================================
+    // RETURN
+    // =======================================
+
+    parseReturn() {
+
+        let value = null;
+
+        /*
+         * return tanpa nilai:
+         *
+         * kembali
+         * selesai
+         */
+
+        if (
+            !this.check("END") &&
+            !this.check("ELSE") &&
+            !this.check("EOF") &&
+            !this.check("SEMICOLON")
+        ) {
+
+            value =
+                this.parseExpression();
+
+        }
+
+        this.match("SEMICOLON");
+
+        return {
+
+            type: "ReturnStatement",
+
+            value
+
+        };
+
+    }
+
+    // =======================================
+    // IMPORT
+    // =======================================
+
+    parseImport() {
+
+        const file =
+            this.expect("STRING").value;
+
+        this.match("SEMICOLON");
+
+        return {
+
+            type: "ImportStatement",
+
+            file
 
         };
 
@@ -930,17 +619,30 @@ ${token.type}`
                     this.parseFunction()
                 );
 
-            } else {
-
-                body.push(
-                    this.parseStatement()
-                );
+                continue;
 
             }
+
+            if (this.match("VAR")) {
+
+                body.push(
+                    this.parseVariable()
+                );
+
+                continue;
+
+            }
+
+            throw this.error(
+                `Token '${this.current().type}' ` +
+                `tidak valid di dalam class.`
+            );
 
         }
 
         this.expect("END");
+
+        this.match("SEMICOLON");
 
         return {
 
@@ -954,5 +656,680 @@ ${token.type}`
 
     }
 
+    // =======================================
+    // EXPRESSION
+    // =======================================
+
+    parseExpression() {
+
+        return this.parseAssignment();
+
+    }
+
+    // =======================================
+    // ASSIGNMENT
+    // =======================================
+
+    parseAssignment() {
+
+        const left =
+            this.parseLogicalOr();
+
+        if (this.match("ASSIGN")) {
+
+            if (
+                left.type !== "Identifier" &&
+                left.type !== "MemberExpression"
+            ) {
+
+                throw this.error(
+                    "Target assignment harus berupa variabel atau property."
+                );
+
+            }
+
+            const right =
+                this.parseAssignment();
+
+            return {
+
+                type: "AssignmentExpression",
+
+                left,
+
+                right
+
+            };
+
+        }
+
+        return left;
+
+    }
+
+    // =======================================
+    // LOGICAL OR
+    // =======================================
+
+    parseLogicalOr() {
+
+        let expr =
+            this.parseLogicalAnd();
+
+        while (
+            this.match("OR")
+        ) {
+
+            expr = {
+
+                type: "LogicalExpression",
+
+                operator: "OR",
+
+                left: expr,
+
+                right:
+                    this.parseLogicalAnd()
+
+            };
+
+        }
+
+        return expr;
+
+    }
+
+    // =======================================
+    // LOGICAL AND
+    // =======================================
+
+    parseLogicalAnd() {
+
+        let expr =
+            this.parseEquality();
+
+        while (
+            this.match("AND")
+        ) {
+
+            expr = {
+
+                type: "LogicalExpression",
+
+                operator: "AND",
+
+                left: expr,
+
+                right:
+                    this.parseEquality()
+
+            };
+
+        }
+
+        return expr;
+
+    }
+
+    // =======================================
+    // EQUALITY
+    // =======================================
+
+    parseEquality() {
+
+        let expr =
+            this.parseComparison();
+
+        while (
+            this.match("EQUAL_EQUAL") ||
+            this.match("NOT_EQUAL")
+        ) {
+
+            const operator =
+                this.previous().type;
+
+            expr = {
+
+                type: "BinaryExpression",
+
+                operator,
+
+                left: expr,
+
+                right:
+                    this.parseComparison()
+
+            };
+
+        }
+
+        return expr;
+
+    }
+
+    // =======================================
+    // COMPARISON
+    // =======================================
+
+    parseComparison() {
+
+        let expr =
+            this.parseTerm();
+
+        while (
+            this.match("GREATER") ||
+            this.match("GREATER_EQUAL") ||
+            this.match("LESS") ||
+            this.match("LESS_EQUAL")
+        ) {
+
+            const operator =
+                this.previous().type;
+
+            expr = {
+
+                type: "BinaryExpression",
+
+                operator,
+
+                left: expr,
+
+                right:
+                    this.parseTerm()
+
+            };
+
+        }
+
+        return expr;
+
+    }
+
+    // =======================================
+    // TERM
+    // =======================================
+
+    parseTerm() {
+
+        let expr =
+            this.parseFactor();
+
+        while (
+            this.match("PLUS") ||
+            this.match("MINUS")
+        ) {
+
+            const operator =
+                this.previous().type;
+
+            expr = {
+
+                type: "BinaryExpression",
+
+                operator,
+
+                left: expr,
+
+                right:
+                    this.parseFactor()
+
+            };
+
+        }
+
+        return expr;
+
+    }
+
+    // =======================================
+    // FACTOR
+    // =======================================
+
+    parseFactor() {
+
+        let expr =
+            this.parseUnary();
+
+        while (
+            this.match("STAR") ||
+            this.match("SLASH") ||
+            this.match("PERCENT")
+        ) {
+
+            const operator =
+                this.previous().type;
+
+            expr = {
+
+                type: "BinaryExpression",
+
+                operator,
+
+                left: expr,
+
+                right:
+                    this.parseUnary()
+
+            };
+
+        }
+
+        return expr;
+
+    }
+
+    // =======================================
+    // UNARY
+    // =======================================
+
+    parseUnary() {
+
+        if (this.match("NOT")) {
+
+            return {
+
+                type: "UnaryExpression",
+
+                operator: "NOT",
+
+                argument:
+                    this.parseUnary()
+
+            };
+
+        }
+
+        if (this.match("MINUS")) {
+
+            return {
+
+                type: "UnaryExpression",
+
+                operator: "MINUS",
+
+                argument:
+                    this.parseUnary()
+
+            };
+
+        }
+
+        return this.parseCall();
+
+    }
+
+    // =======================================
+    // CALL / MEMBER / INDEX
+    // =======================================
+
+    parseCall() {
+
+        let expr =
+            this.parsePrimary();
+
+        while (true) {
+
+            // -------------------------------
+            // Function Call
+            // -------------------------------
+
+            if (this.match("LEFT_PAREN")) {
+
+                const args = [];
+
+                if (
+                    !this.check("RIGHT_PAREN")
+                ) {
+
+                    do {
+
+                        args.push(
+                            this.parseExpression()
+                        );
+
+                    } while (
+                        this.match("COMMA")
+                    );
+
+                }
+
+                this.expect("RIGHT_PAREN");
+
+                expr = {
+
+                    type: "CallExpression",
+
+                    callee: expr,
+
+                    arguments: args
+
+                };
+
+                continue;
+
+            }
+
+            // -------------------------------
+            // Member Access
+            // -------------------------------
+
+            if (this.match("DOT")) {
+
+                const property = {
+
+                    type: "Identifier",
+
+                    name:
+                        this.expect(
+                            "IDENTIFIER"
+                        ).value
+
+                };
+
+                expr = {
+
+                    type: "MemberExpression",
+
+                    object: expr,
+
+                    property,
+
+                    computed: false
+
+                };
+
+                continue;
+
+            }
+
+            // -------------------------------
+            // Array Index
+            // -------------------------------
+
+            if (this.match("LEFT_BRACKET")) {
+
+                const property =
+                    this.parseExpression();
+
+                this.expect(
+                    "RIGHT_BRACKET"
+                );
+
+                expr = {
+
+                    type: "MemberExpression",
+
+                    object: expr,
+
+                    property,
+
+                    computed: true
+
+                };
+
+                continue;
+
+            }
+
+            break;
+
+        }
+
+        return expr;
+
+    }
+
+    // =======================================
+    // PRIMARY
+    // =======================================
+
+    parsePrimary() {
+
+        // -------------------------------
+        // Number
+        // -------------------------------
+
+        if (this.match("NUMBER")) {
+
+            return {
+
+                type: "Literal",
+
+                value:
+                    this.previous().value
+
+            };
+
+        }
+
+        // -------------------------------
+        // String
+        // -------------------------------
+
+        if (this.match("STRING")) {
+
+            return {
+
+                type: "Literal",
+
+                value:
+                    this.previous().value
+
+            };
+
+        }
+
+        // -------------------------------
+        // Boolean
+        // -------------------------------
+
+        if (this.match("BOOLEAN")) {
+
+            return {
+
+                type: "Literal",
+
+                value:
+                    this.previous().value
+
+            };
+
+        }
+
+        // -------------------------------
+        // Null
+        // -------------------------------
+
+        if (this.match("NULL")) {
+
+            return {
+
+                type: "Literal",
+
+                value: null
+
+            };
+
+        }
+
+        // -------------------------------
+        // Identifier
+        // -------------------------------
+
+        if (this.match("IDENTIFIER")) {
+
+            return {
+
+                type: "Identifier",
+
+                name:
+                    this.previous().value
+
+            };
+
+        }
+
+        // -------------------------------
+        // Grouping
+        // -------------------------------
+
+        if (this.match("LEFT_PAREN")) {
+
+            const expression =
+                this.parseExpression();
+
+            this.expect("RIGHT_PAREN");
+
+            return expression;
+
+        }
+
+        // -------------------------------
+        // Array
+        // -------------------------------
+
+        if (this.match("LEFT_BRACKET")) {
+
+            const elements = [];
+
+            if (
+                !this.check("RIGHT_BRACKET")
+            ) {
+
+                do {
+
+                    elements.push(
+                        this.parseExpression()
+                    );
+
+                } while (
+                    this.match("COMMA")
+                );
+
+            }
+
+            this.expect("RIGHT_BRACKET");
+
+            return {
+
+                type: "ArrayExpression",
+
+                elements
+
+            };
+
+        }
+
+        // -------------------------------
+        // Object
+        // -------------------------------
+
+        if (this.match("LEFT_BRACE")) {
+
+            const properties = [];
+
+            if (
+                !this.check("RIGHT_BRACE")
+            ) {
+
+                do {
+
+                    let key;
+
+                    // Object key bisa identifier
+                    if (
+                        this.check("IDENTIFIER")
+                    ) {
+
+                        key =
+                            this.advance().value;
+
+                    }
+
+                    // Atau string
+                    else if (
+                        this.check("STRING")
+                    ) {
+
+                        key =
+                            this.advance().value;
+
+                    }
+
+                    else {
+
+                        throw this.error(
+                            "Key object harus berupa identifier atau string."
+                        );
+
+                    }
+
+                    this.expect("COLON");
+
+                    const value =
+                        this.parseExpression();
+
+                    properties.push({
+
+                        key,
+
+                        value
+
+                    });
+
+                } while (
+                    this.match("COMMA")
+                );
+
+            }
+
+            this.expect("RIGHT_BRACE");
+
+            return {
+
+                type: "ObjectExpression",
+
+                properties
+
+            };
+
+        }
+
+        throw this.error(
+            `Expression tidak valid. ` +
+            `Mendapat ${this.current().type}` +
+            (
+                this.current().value !== null
+                    ? ` '${this.current().value}'`
+                    : ""
+            )
+        );
+
+    }
+
+    // =======================================
+    // ERROR
+    // =======================================
+
+    error(message) {
+
+        const token =
+            this.current();
+
+        return new Error(
+
+            `Parser Error (${token.line}:${token.column})\n` +
+            message
+
+        );
+
+    }
+
 }
+
+
+// =======================================
+// EXPORT
+// =======================================
+
 module.exports = Parser;
