@@ -188,6 +188,12 @@ class Parser {
 
         }
 
+        if (this.match("WAIT")) {
+
+            return this.parseWait();
+
+        }
+
         if (this.match("WHILE")) {
 
             return this.parseWhile();
@@ -225,6 +231,27 @@ class Parser {
         }
 
         return this.parseExpressionStatement();
+
+    }
+
+    // =======================================
+    // WAIT
+    // =======================================
+
+    parseWait() {
+
+    const duration =
+        this.parseExpression();
+
+    this.match("SEMICOLON");
+
+    return {
+
+        type: "WaitStatement",
+
+        duration
+
+      };
 
     }
 
@@ -310,59 +337,32 @@ class Parser {
 
     parseIf() {
 
-        const condition =
-            this.parseExpression();
+    const condition =
+        this.parseExpression();
 
-        this.expect("THEN");
+    const thenBody =
+        this.parseBlock();
 
-        const thenBody = [];
+    let elseBody = null;
 
-        while (
-            !this.check("ELSE") &&
-            !this.check("END") &&
-            !this.isAtEnd()
-        ) {
+    if (this.match("ELSE")) {
 
-            thenBody.push(
-                this.parseStatement()
-            );
+        elseBody =
+            this.parseBlock();
 
-        }
+    }
 
-        let elseBody = null;
+    return {
 
-        if (this.match("ELSE")) {
+        type: "IfStatement",
 
-            elseBody = [];
+        condition,
 
-            while (
-                !this.check("END") &&
-                !this.isAtEnd()
-            ) {
+        thenBody,
 
-                elseBody.push(
-                    this.parseStatement()
-                );
+        elseBody
 
-            }
-
-        }
-
-        this.expect("END");
-
-        this.match("SEMICOLON");
-
-        return {
-
-            type: "IfStatement",
-
-            condition,
-
-            thenBody,
-
-            elseBody
-
-        };
+      };
 
     }
 
@@ -372,37 +372,35 @@ class Parser {
 
     parseWhile() {
 
-        const condition =
-            this.parseExpression();
+    const condition =
+        this.parseExpression();
 
-        this.expect("DO");
+    this.expect("LEFT_BRACE");
 
-        const body = [];
+    const body = [];
 
-        while (
-            !this.check("END") &&
-            !this.isAtEnd()
-        ) {
+    while (
+        !this.check("RIGHT_BRACE") &&
+        !this.isAtEnd()
+    ) {
 
-            body.push(
-                this.parseStatement()
-            );
+        body.push(
+            this.parseStatement()
+        );
 
-        }
+    }
 
-        this.expect("END");
+    this.expect("RIGHT_BRACE");
 
-        this.match("SEMICOLON");
+    return {
 
-        return {
+        type: "WhileStatement",
 
-            type: "WhileStatement",
+        condition,
 
-            condition,
+        body
 
-            body
-
-        };
+      };
 
     }
 
@@ -412,128 +410,132 @@ class Parser {
 
     parseFor() {
 
-        const variable =
-            this.expect("IDENTIFIER").value;
+    const variable =
+        this.expect("IDENTIFIER").value;
 
-        this.expect("FROM");
+    this.expect("FROM");
 
-        const start =
+    const start =
+        this.parseExpression();
+
+    this.expect("TO");
+
+    const end =
+        this.parseExpression();
+
+    let step = {
+        type: "Literal",
+        value: 1
+    };
+
+    if (this.match("STEP")) {
+
+        step =
             this.parseExpression();
 
-        this.expect("TO");
+    }
 
-        const end =
-            this.parseExpression();
+    // "lakukan"
+    this.expect("DO");
 
-        let step = {
+    // Block menggunakan { ... }
+    const body =
+        this.parseBlock();
 
-            type: "Literal",
+    return {
 
-            value: 1
+        type: "ForStatement",
 
-        };
+        variable,
 
-        if (this.match("STEP")) {
+        start,
 
-            step =
-                this.parseExpression();
+        end,
 
+        step,
+
+        body
+
+     };
+
+    }
+
+    // =======================================
+    // BLOCK
+    // =======================================
+
+    parseBlock() {
+
+    this.expect("LEFT_BRACE");
+
+    const body = [];
+
+    while (
+        !this.check("RIGHT_BRACE") &&
+        !this.isAtEnd()
+    ) {
+
+        if (this.match("SEMICOLON")) {
+            continue;
         }
 
-        this.expect("DO");
+        body.push(
+            this.parseStatement()
+        );
 
-        const body = [];
+    }
 
-        while (
-            !this.check("END") &&
-            !this.isAtEnd()
-        ) {
+    this.expect("RIGHT_BRACE");
 
-            body.push(
-                this.parseStatement()
-            );
-
-        }
-
-        this.expect("END");
-
-        this.match("SEMICOLON");
-
-        return {
-
-            type: "ForStatement",
-
-            variable,
-
-            start,
-
-            end,
-
-            step,
-
-            body
-
-        };
+    return body;
 
     }
 
     // =======================================
     // FUNCTION
     // =======================================
-
     parseFunction() {
 
-        const name =
-            this.expect("IDENTIFIER").value;
+    const name =
+        this.expect("IDENTIFIER").value;
 
-        this.expect("LEFT_PAREN");
+    this.expect("LEFT_PAREN");
 
-        const params = [];
+    const params = [];
 
-        if (!this.check("RIGHT_PAREN")) {
+    if (!this.check("RIGHT_PAREN")) {
 
-            do {
+        do {
 
-                params.push(
-                    this.expect("IDENTIFIER").value
-                );
-
-            } while (
-                this.match("COMMA")
+            params.push(
+                this.expect("IDENTIFIER").value
             );
 
-        }
+        } while (
+            this.match("COMMA")
+        );
 
-        this.expect("RIGHT_PAREN");
+    }
 
-        const body = [];
+    this.expect("RIGHT_PAREN");
 
-        while (
-            !this.check("END") &&
-            !this.isAtEnd()
-        ) {
+    // Function menggunakan { ... }
+    const body =
+        this.parseBlock();
 
-            body.push(
-                this.parseStatement()
-            );
+    this.match("SEMICOLON");
 
-        }
+    return {
 
-        this.expect("END");
+        type: "FunctionDeclaration",
 
-        this.match("SEMICOLON");
+        name,
 
-        return {
+        params,
 
-            type: "FunctionDeclaration",
+        body
 
-            name,
-
-            params,
-
-            body
-
-        };
+     };
 
     }
 
@@ -553,10 +555,10 @@ class Parser {
          */
 
         if (
-            !this.check("END") &&
-            !this.check("ELSE") &&
-            !this.check("EOF") &&
-            !this.check("SEMICOLON")
+        !this.check("RIGHT_BRACE") &&
+        !this.check("ELSE") &&
+        !this.check("EOF") &&
+        !this.check("SEMICOLON")
         ) {
 
             value =
@@ -605,44 +607,9 @@ class Parser {
 
         const name =
             this.expect("IDENTIFIER").value;
-
-        const body = [];
-
-        while (
-            !this.check("END") &&
-            !this.isAtEnd()
-        ) {
-
-            if (this.match("FUNCTION")) {
-
-                body.push(
-                    this.parseFunction()
-                );
-
-                continue;
-
-            }
-
-            if (this.match("VAR")) {
-
-                body.push(
-                    this.parseVariable()
-                );
-
-                continue;
-
-            }
-
-            throw this.error(
-                `Token '${this.current().type}' ` +
-                `tidak valid di dalam class.`
-            );
-
-        }
-
-        this.expect("END");
-
-        this.match("SEMICOLON");
+        
+        const body =
+        this.parseBlock();
 
         return {
 
@@ -1133,6 +1100,30 @@ class Parser {
                     this.previous().value
 
             };
+
+        }
+
+        // -------------------------------
+        // Wait Expression
+        // -------------------------------
+
+        if (this.match("WAIT")) {
+
+        const duration =
+           this.parseUnary();
+
+        const expression =
+           this.parseUnary();
+
+        return {
+
+           type: "WaitExpression",
+
+           duration,
+
+           expression
+
+           };
 
         }
 

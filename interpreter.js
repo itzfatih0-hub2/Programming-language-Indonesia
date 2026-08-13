@@ -20,14 +20,9 @@ class Interpreter {
 
     constructor(stdlib = {}) {
 
-        this.globals = new Map();
+    this.globals = new Map();
 
-        // Standard Library
-        for (const [nama, fungsi] of Object.entries(stdlib)) {
-
-            this.globals.set(nama, fungsi);
-
-        }
+    this.stdlib = stdlib;
 
     }
 
@@ -317,9 +312,23 @@ class Interpreter {
 
     executeImport(node) {
 
+    const namaModule = node.file;
+
+    if (!namaModule) {
         throw new Error(
-            `Import '${node.file}' belum didukung oleh runtime.`
+            "Import membutuhkan nama module."
         );
+    }
+
+    // Kalau stdlib sudah tersedia di globals,
+    // tidak perlu load ulang.
+    if (this.globals.has(namaModule)) {
+        return this.globals.get(namaModule);
+    }
+
+    throw new Error(
+        `Modul '${namaModule}' tidak ditemukan.`
+      );
 
     }
 
@@ -678,102 +687,84 @@ class Interpreter {
 
     evaluateCall(node) {
 
-        const func =
-            this.evaluate(node.callee);
+    const args =
+        node.arguments.map(
+            argument => this.evaluate(argument)
+        );
 
-        const args =
-            node.arguments.map(
-                argument => this.evaluate(argument)
-            );
+    // ===================================
+    // Method call
+    // ===================================
 
-        // Built-in / standard library
-        if (typeof func === "function") {
+    if (
+        node.callee &&
+        node.callee.type === "MemberExpression"
+    ) {
 
-            return func(...args);
+        const object =
+            this.evaluate(node.callee.object);
 
-        }
-
-        // User-defined function
         if (
-            func &&
-            func.type === "FunctionDeclaration"
+            object === null ||
+            object === undefined
         ) {
 
-            return this.callFunction(
-                func,
-                args
+            throw new Error(
+                "Tidak bisa memanggil method dari nilai kosong."
             );
 
         }
 
-        throw new Error(
-            "Objek yang dipanggil bukan sebuah fungsi."
+        const property =
+            node.callee.computed
+                ? this.evaluate(node.callee.property)
+                : node.callee.property.name;
+
+        const func =
+            object[property];
+
+        if (typeof func !== "function") {
+
+            throw new Error(
+                `'${property}' bukan sebuah fungsi.`
+            );
+
+        }
+
+        return func.apply(object, args);
+
+    }
+
+    // ===================================
+    // Function biasa
+    // ===================================
+
+    const func =
+        this.evaluate(node.callee);
+
+    // Standard library
+    if (typeof func === "function") {
+
+        return func(...args);
+
+    }
+
+    // User-defined function
+    if (
+        func &&
+        func.type === "FunctionDeclaration"
+    ) {
+
+        return this.callFunction(
+            func,
+            args
         );
 
     }
 
-    // =======================================
-    // CALL USER FUNCTION
-    // =======================================
-
-    callFunction(func, args) {
-
-        const previousGlobals =
-            this.globals;
-
-        const localScope =
-            new Map(previousGlobals);
-
-        this.globals =
-            localScope;
-
-        try {
-
-            for (
-                let i = 0;
-                i < func.params.length;
-                i++
-            ) {
-
-                const parameter =
-                    func.params[i];
-
-                const value =
-                    i < args.length
-                        ? args[i]
-                        : null;
-
-                this.globals.set(
-                    parameter,
-                    value
-                );
-
-            }
-
-            for (const statement of func.body) {
-
-                this.execute(statement);
-
-            }
-
-            return null;
-
-        } catch (error) {
-
-            if (error instanceof ReturnSignal) {
-
-                return error.value;
-
-            }
-
-            throw error;
-
-        } finally {
-
-            this.globals =
-                previousGlobals;
-
-        }
+    throw new Error(
+        "Objek yang dipanggil bukan sebuah fungsi."
+      );
 
     }
 

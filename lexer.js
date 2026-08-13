@@ -1,13 +1,13 @@
 // =======================================
 // Bahasa Indonesia Programming Language
-// Lexer v2
+// Lexer v3
 // =======================================
 
 const KEYWORDS = require("./keywords");
 
 
 // =======================================
-// Token
+// TOKEN
 // =======================================
 
 class Token {
@@ -31,12 +31,20 @@ class Token {
 
 
 // =======================================
-// Lexer
+// LEXER
 // =======================================
 
 class Lexer {
 
     constructor(source) {
+
+        if (typeof source !== "string") {
+
+            throw new TypeError(
+                "Source lexer harus berupa string."
+            );
+
+        }
 
         this.source = source;
 
@@ -50,7 +58,7 @@ class Lexer {
 
 
     // ===================================
-    // Navigation
+    // NAVIGATION
     // ===================================
 
     current() {
@@ -59,7 +67,6 @@ class Lexer {
 
     }
 
-
     peek(offset = 1) {
 
         return this.source[
@@ -67,7 +74,6 @@ class Lexer {
         ];
 
     }
-
 
     eof() {
 
@@ -78,10 +84,18 @@ class Lexer {
 
     }
 
-
     advance() {
 
-        const char = this.current();
+        if (this.eof()) {
+
+            return "";
+
+        }
+
+        const char =
+            this.current();
+
+        this.position++;
 
         if (char === "\n") {
 
@@ -94,15 +108,13 @@ class Lexer {
 
         }
 
-        this.position++;
-
         return char;
 
     }
 
 
     // ===================================
-    // Character Helpers
+    // CHARACTER HELPERS
     // ===================================
 
     isWhitespace(char) {
@@ -116,39 +128,36 @@ class Lexer {
 
     }
 
-
     isDigit(char) {
 
         return (
-            char !== undefined &&
-            /[0-9]/.test(char)
+            typeof char === "string" &&
+            /^[0-9]$/.test(char)
         );
 
     }
-
 
     isLetter(char) {
 
         return (
-            char !== undefined &&
-            /[A-Za-z_]/.test(char)
+            typeof char === "string" &&
+            /^[A-Za-z_]$/.test(char)
         );
 
     }
 
-
     isAlphaNumeric(char) {
 
         return (
-            char !== undefined &&
-            /[A-Za-z0-9_]/.test(char)
+            typeof char === "string" &&
+            /^[A-Za-z0-9_]$/.test(char)
         );
 
     }
 
 
     // ===================================
-    // Token
+    // TOKEN CREATOR
     // ===================================
 
     makeToken(
@@ -169,7 +178,20 @@ class Lexer {
 
 
     // ===================================
-    // Whitespace
+    // ERROR
+    // ===================================
+
+    error(message, line = this.line, column = this.column) {
+
+        return new Error(
+            `Lexer Error (${line}:${column})\n${message}`
+        );
+
+    }
+
+
+    // ===================================
+    // WHITESPACE
     // ===================================
 
     skipWhitespace() {
@@ -193,14 +215,14 @@ class Lexer {
 
 
     // ===================================
-    // Comments
+    // COMMENTS
     // ===================================
 
     skipComment() {
 
-        // -------------------------------
+        // --------------------------------
         // #
-        // -------------------------------
+        // --------------------------------
 
         if (
             this.current() === "#"
@@ -220,9 +242,9 @@ class Lexer {
         }
 
 
-        // -------------------------------
+        // --------------------------------
         // //
-        // -------------------------------
+        // --------------------------------
 
         if (
             this.current() === "/" &&
@@ -246,19 +268,19 @@ class Lexer {
         }
 
 
-        // -------------------------------
+        // --------------------------------
         // /* ... */
-        // -------------------------------
+        // --------------------------------
 
         if (
             this.current() === "/" &&
             this.peek() === "*"
         ) {
 
-            const startLine =
+            const line =
                 this.line;
 
-            const startColumn =
+            const column =
                 this.column;
 
             this.advance();
@@ -282,13 +304,13 @@ class Lexer {
 
             }
 
-            throw new Error(
-                `Lexer Error (${startLine}:${startColumn}) ` +
-                `Komentar multiline belum ditutup.`
+            throw this.error(
+                "Komentar multiline belum ditutup.",
+                line,
+                column
             );
 
         }
-
 
         return false;
 
@@ -296,7 +318,7 @@ class Lexer {
 
 
     // ===================================
-    // Number
+    // NUMBER
     // ===================================
 
     readNumber() {
@@ -317,18 +339,16 @@ class Lexer {
             const char =
                 this.current();
 
-
+            // Angka
             if (this.isDigit(char)) {
 
-                text += char;
-
-                this.advance();
+                text += this.advance();
 
                 continue;
 
             }
 
-
+            // Desimal
             if (
                 char === "." &&
                 !hasDot &&
@@ -337,14 +357,11 @@ class Lexer {
 
                 hasDot = true;
 
-                text += char;
-
-                this.advance();
+                text += this.advance();
 
                 continue;
 
             }
-
 
             break;
 
@@ -355,11 +372,14 @@ class Lexer {
             Number(text);
 
 
-        if (Number.isNaN(value)) {
+        if (
+            !Number.isFinite(value)
+        ) {
 
-            throw new Error(
-                `Lexer Error (${line}:${column}) ` +
-                `Angka '${text}' tidak valid.`
+            throw this.error(
+                `Angka '${text}' tidak valid.`,
+                line,
+                column
             );
 
         }
@@ -376,7 +396,7 @@ class Lexer {
 
 
     // ===================================
-    // String
+    // STRING
     // ===================================
 
     readString() {
@@ -392,7 +412,6 @@ class Lexer {
 
         this.advance();
 
-
         let value = "";
 
 
@@ -402,9 +421,9 @@ class Lexer {
                 this.current();
 
 
-            // ---------------------------
-            // String selesai
-            // ---------------------------
+            // --------------------------------
+            // Penutup string
+            // --------------------------------
 
             if (char === quote) {
 
@@ -420,25 +439,26 @@ class Lexer {
             }
 
 
-            // ---------------------------
+            // --------------------------------
             // Escape
-            // ---------------------------
+            // --------------------------------
 
             if (char === "\\") {
 
                 this.advance();
 
-
                 if (this.eof()) {
 
-                    break;
+                    throw this.error(
+                        "String berakhir setelah karakter escape.",
+                        line,
+                        column
+                    );
 
                 }
 
-
                 const escaped =
                     this.current();
-
 
                 switch (escaped) {
 
@@ -468,12 +488,13 @@ class Lexer {
 
                     default:
 
+                        // Untuk sekarang:
+                        // \x -> x
                         value += escaped;
 
                         break;
 
                 }
-
 
                 this.advance();
 
@@ -482,37 +503,37 @@ class Lexer {
             }
 
 
-            // ---------------------------
-            // Newline dalam string
-            // ---------------------------
+            // --------------------------------
+            // Newline
+            // --------------------------------
 
             if (char === "\n") {
 
-                throw new Error(
-                    `Lexer Error (${line}:${column}) ` +
-                    `String belum ditutup.`
+                throw this.error(
+                    "String belum ditutup.",
+                    line,
+                    column
                 );
 
             }
 
 
-            value += char;
-
-            this.advance();
+            value += this.advance();
 
         }
 
 
-        throw new Error(
-            `Lexer Error (${line}:${column}) ` +
-            `String belum ditutup.`
+        throw this.error(
+            "String belum ditutup.",
+            line,
+            column
         );
 
     }
 
 
     // ===================================
-    // Identifier / Keyword
+    // IDENTIFIER / KEYWORD
     // ===================================
 
     readIdentifier() {
@@ -533,26 +554,24 @@ class Lexer {
             )
         ) {
 
-            value += this.current();
-
-            this.advance();
+            value += this.advance();
 
         }
 
 
-        // -------------------------------
-        // Keyword
-        // -------------------------------
-
-        const keywordType =
+        const keyword =
             KEYWORDS[value];
 
 
-        if (keywordType) {
+        // --------------------------------
+        // Keyword
+        // --------------------------------
+
+        if (keyword) {
 
             // Boolean
             if (
-                keywordType === "BOOLEAN"
+                keyword === "BOOLEAN"
             ) {
 
                 return this.makeToken(
@@ -567,7 +586,7 @@ class Lexer {
 
             // Null
             if (
-                keywordType === "NULL"
+                keyword === "NULL"
             ) {
 
                 return this.makeToken(
@@ -581,7 +600,7 @@ class Lexer {
 
 
             return this.makeToken(
-                keywordType,
+                keyword,
                 value,
                 line,
                 column
@@ -590,9 +609,9 @@ class Lexer {
         }
 
 
-        // -------------------------------
+        // --------------------------------
         // Identifier
-        // -------------------------------
+        // --------------------------------
 
         return this.makeToken(
             "IDENTIFIER",
@@ -605,7 +624,7 @@ class Lexer {
 
 
     // ===================================
-    // Operator
+    // OPERATORS
     // ===================================
 
     readOperator() {
@@ -616,14 +635,19 @@ class Lexer {
         const column =
             this.column;
 
-        const two =
-            this.current() +
+        const first =
+            this.current();
+
+        const second =
             this.peek();
 
+        const two =
+            `${first}${second}`;
 
-        // ===============================
+
+        // --------------------------------
         // Two-character operators
-        // ===============================
+        // --------------------------------
 
         const doubleOperators = {
 
@@ -643,7 +667,10 @@ class Lexer {
 
 
         if (
-            doubleOperators[two]
+            Object.prototype.hasOwnProperty.call(
+                doubleOperators,
+                two
+            )
         ) {
 
             this.advance();
@@ -659,9 +686,9 @@ class Lexer {
         }
 
 
-        // ===============================
+        // --------------------------------
         // Single-character operators
-        // ===============================
+        // --------------------------------
 
         const operators = {
 
@@ -687,33 +714,30 @@ class Lexer {
 
 
         const type =
-            operators[this.current()];
+            operators[first];
 
 
-        if (type) {
+        if (!type) {
 
-            const value =
-                this.current();
-
-            this.advance();
-
-            return this.makeToken(
-                type,
-                value,
-                line,
-                column
-            );
+            return null;
 
         }
 
 
-        return null;
+        this.advance();
+
+        return this.makeToken(
+            type,
+            first,
+            line,
+            column
+        );
 
     }
 
 
     // ===================================
-    // Symbol
+    // SYMBOLS
     // ===================================
 
     readSymbol() {
@@ -765,7 +789,6 @@ class Lexer {
 
         this.advance();
 
-
         return this.makeToken(
             type,
             char,
@@ -777,7 +800,7 @@ class Lexer {
 
 
     // ===================================
-    // Main Tokenizer
+    // TOKENIZE
     // ===================================
 
     tokenize() {
@@ -787,9 +810,9 @@ class Lexer {
 
         while (!this.eof()) {
 
-            // ---------------------------
+            // -------------------------------
             // Whitespace
-            // ---------------------------
+            // -------------------------------
 
             if (
                 this.isWhitespace(
@@ -804,9 +827,9 @@ class Lexer {
             }
 
 
-            // ---------------------------
+            // -------------------------------
             // Comment
-            // ---------------------------
+            // -------------------------------
 
             if (
                 this.skipComment()
@@ -817,9 +840,9 @@ class Lexer {
             }
 
 
-            // ---------------------------
+            // -------------------------------
             // Number
-            // ---------------------------
+            // -------------------------------
 
             if (
                 this.isDigit(
@@ -836,9 +859,9 @@ class Lexer {
             }
 
 
-            // ---------------------------
+            // -------------------------------
             // String
-            // ---------------------------
+            // -------------------------------
 
             if (
                 this.current() === "\"" ||
@@ -854,9 +877,9 @@ class Lexer {
             }
 
 
-            // ---------------------------
+            // -------------------------------
             // Identifier
-            // ---------------------------
+            // -------------------------------
 
             if (
                 this.isLetter(
@@ -873,13 +896,12 @@ class Lexer {
             }
 
 
-            // ---------------------------
+            // -------------------------------
             // Operator
-            // ---------------------------
+            // -------------------------------
 
             const operator =
                 this.readOperator();
-
 
             if (operator) {
 
@@ -890,13 +912,12 @@ class Lexer {
             }
 
 
-            // ---------------------------
+            // -------------------------------
             // Symbol
-            // ---------------------------
+            // -------------------------------
 
             const symbol =
                 this.readSymbol();
-
 
             if (symbol) {
 
@@ -907,15 +928,12 @@ class Lexer {
             }
 
 
-            // ---------------------------
-            // Unknown
-            // ---------------------------
+            // -------------------------------
+            // Unknown character
+            // -------------------------------
 
-            throw new Error(
-
-                `Lexer Error (${this.line}:${this.column}) ` +
+            throw this.error(
                 `Karakter '${this.current()}' tidak dikenali.`
-
             );
 
         }
@@ -926,12 +944,12 @@ class Lexer {
         // =================================
 
         tokens.push(
-
             this.makeToken(
                 "EOF",
-                null
+                null,
+                this.line,
+                this.column
             )
-
         );
 
 
@@ -943,13 +961,10 @@ class Lexer {
 
 
 // =======================================
-// Export
+// EXPORT
 // =======================================
 
 module.exports = {
-
     Lexer,
-
     Token
-
 };

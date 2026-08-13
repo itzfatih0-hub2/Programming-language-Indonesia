@@ -1,6 +1,6 @@
 {
   "name": "bahasa-indonesia",
-  "version": "1.0.0",
+  "version": "4.0.0",
   "description": "Bahasa Pemrograman Bahasa Indonesia (Baku & Gaul)",
   "main": "index.js",
   "type": "commonjs",

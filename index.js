@@ -1,24 +1,41 @@
 const fs = require("fs");
 const path = require("path");
+
 const stdlib = require("./stdlib");
 
 const { Lexer } = require("./lexer");
 const Parser = require("./parser");
-const Interpreter = require("./interpreter");
+const Runtime = require("./runtime");
 
 const file = process.argv[2];
+
+
+// =======================================
+// ARGUMENT
+// =======================================
 
 if (!file) {
 
     console.log("Penggunaan:");
     console.log("indo <file.indo>");
+
     process.exit(1);
 
 }
 
-const fullPath = path.resolve(file);
 
-// File tidak ditemukan
+// =======================================
+// RESOLVE FILE
+// =======================================
+
+const fullPath =
+    path.resolve(file);
+
+
+// =======================================
+// FILE CHECK
+// =======================================
+
 if (!fs.existsSync(fullPath)) {
 
     console.error(
@@ -30,7 +47,11 @@ if (!fs.existsSync(fullPath)) {
 
 }
 
-// Bukan file
+
+// =======================================
+// FILE TYPE
+// =======================================
+
 if (!fs.statSync(fullPath).isFile()) {
 
     console.error(
@@ -41,8 +62,14 @@ if (!fs.statSync(fullPath).isFile()) {
 
 }
 
-// Ekstensi salah
-if (path.extname(fullPath) !== ".indo") {
+
+// =======================================
+// EXTENSION CHECK
+// =======================================
+
+if (
+    path.extname(fullPath) !== ".indo"
+) {
 
     console.error(
         "indo : hanya dapat menjalankan file berekstensi .indo"
@@ -52,30 +79,82 @@ if (path.extname(fullPath) !== ".indo") {
 
 }
 
-try {
 
-    const source =
-        fs.readFileSync(fullPath, "utf8");
+// =======================================
+// COMPILE + RUN
+// =======================================
 
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
+async function main() {
 
-    const parser = new Parser(tokens);
-    const ast = parser.parse();
+    try {
 
-    const interpreter =
-        new Interpreter(stdlib);
+        // -------------------------------
+        // Read source
+        // -------------------------------
 
-    interpreter.interpret(ast);
+        const source =
+            fs.readFileSync(
+                fullPath,
+                "utf8"
+            );
 
-} catch (err) {
 
-    console.error(
-        "\nRuntime Error:\n"
-    );
+        // -------------------------------
+        // Lexer
+        // -------------------------------
 
-    console.error(err.message);
+        const lexer =
+            new Lexer(source);
 
-    process.exit(1);
+        const tokens =
+            lexer.tokenize();
+
+
+        // -------------------------------
+        // Parser
+        // -------------------------------
+
+        const parser =
+            new Parser(tokens);
+
+        const ast =
+            parser.parse();
+
+
+        // -------------------------------
+        // Runtime
+        // -------------------------------
+
+        const runtime =
+            new Runtime(stdlib);
+
+
+        // -------------------------------
+        // Execute AST
+        // -------------------------------
+
+        await runtime.run(ast);
+
+
+    } catch (err) {
+
+        console.error(
+            "\nIndo Error:\n"
+        );
+
+        console.error(
+            err.message
+        );
+
+        process.exit(1);
+
+    }
 
 }
+
+
+// =======================================
+// START
+// =======================================
+
+main();

@@ -15,16 +15,14 @@ const teks = require("./teks");
 const waktu = require("./waktu");
 
 module.exports = {
-
-    ...acak,
-    ...array,
-    ...database,
-    ...file,
-    ...http,
-    ...json,
-    ...matematika,
-    ...sistem,
-    ...teks,
-    ...waktu
-
+    acak,
+    array,
+    database,
+    file,
+    http,
+    json,
+    matematika,
+    sistem,
+    teks,
+    waktu
 };
