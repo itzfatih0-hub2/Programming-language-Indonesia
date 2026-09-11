@@ -1,7 +1,7 @@
 // =======================================
 // Bahasa Indonesia Programming Language
-// Runtime v3
-// AST Consistent Runtime
+// Runtime v4
+// Async + Scope + AST Consistent Runtime
 // =======================================
 
 class ReturnSignal {
@@ -14,7 +14,7 @@ class ReturnSignal {
 
 
 // =======================================
-// Runtime
+// RUNTIME
 // =======================================
 
 class Runtime {
@@ -54,7 +54,10 @@ class Runtime {
             of Object.entries(initial)
         ) {
 
-            scope.set(name, value);
+            scope.set(
+                name,
+                value
+            );
 
         }
 
@@ -67,7 +70,9 @@ class Runtime {
 
     popScope() {
 
-        if (this.scopes.length <= 1) {
+        if (
+            this.scopes.length <= 1
+        ) {
 
             throw new Error(
                 "Tidak bisa menghapus global scope."
@@ -86,46 +91,59 @@ class Runtime {
 
     async run(program) {
 
-    if (
-        !program ||
-        program.type !== "Program"
-    ) {
-        throw new Error(
-            "AST tidak valid. Root harus bertipe 'Program'."
-        );
-    }
-
-    let result = null;
-
-    try {
-
-        for (const statement of program.body) {
-
-            result = await this.execute(statement);
-
-        }
-
-    } catch (error) {
-
-        if (error instanceof ReturnSignal) {
+        if (
+            !program ||
+            program.type !== "Program"
+        ) {
 
             throw new Error(
-                "Pernyataan 'kembali' tidak boleh berada di luar fungsi."
+                "AST tidak valid. Root harus bertipe 'Program'."
             );
 
         }
 
-        throw error;
-      }
+        let result = null;
 
-       return result;
+        try {
+
+            for (
+                const statement
+                of program.body
+            ) {
+
+                result =
+                    await this.execute(
+                        statement
+                    );
+
+            }
+
+        } catch (error) {
+
+            if (
+                error instanceof ReturnSignal
+            ) {
+
+                throw new Error(
+                    "Pernyataan 'kembali' tidak boleh berada di luar fungsi."
+                );
+
+            }
+
+            throw error;
+
+        }
+
+        return result;
+
     }
 
 
     // Alias
+
     async interpret(program) {
 
-    return this.run(program);
+        return this.run(program);
 
     }
 
@@ -170,6 +188,7 @@ class Runtime {
 
                 return await this.executeIf(node);
 
+
             case "WaitStatement":
 
                 return await this.executeWait(node);
@@ -187,7 +206,7 @@ class Runtime {
 
             case "FunctionDeclaration":
 
-                return await this.executeFunction(node);
+                return this.executeFunction(node);
 
 
             case "ReturnStatement":
@@ -202,7 +221,7 @@ class Runtime {
 
             case "ClassDeclaration":
 
-                return await this.executeClass(node);
+                return this.executeClass(node);
 
 
             default:
@@ -215,50 +234,80 @@ class Runtime {
 
     }
 
-    // =======================================
-    // WAIT
-    // =======================================
 
-    executeWait(node) {
+    // ===================================
+    // WAIT STATEMENT
+    // ===================================
 
-    const duration =
-        this.evaluate(node.duration);
+    async executeWait(node) {
 
-    if (
-        typeof duration !== "number" ||
-        !Number.isFinite(duration)
-    ) {
+        const duration =
+            await this.evaluate(
+                node.duration
+            );
 
-        throw new Error(
-            "Durasi 'tunggu' harus berupa angka."
+        await this.sleep(
+            duration
         );
+
+        return null;
 
     }
 
-    if (duration < 0) {
 
-        throw new Error(
-            "Durasi 'tunggu' tidak boleh negatif."
-        );
+    // ===================================
+    // WAIT HELPER
+    // ===================================
+
+    validateDuration(duration) {
+
+        if (
+            typeof duration !== "number" ||
+            !Number.isFinite(duration)
+        ) {
+
+            throw new Error(
+                "Durasi 'tunggu' harus berupa angka."
+            );
+
+        }
+
+        if (
+            duration < 0
+        ) {
+
+            throw new Error(
+                "Durasi 'tunggu' tidak boleh negatif."
+            );
+
+        }
 
     }
 
-    return new Promise(resolve => {
 
-        setTimeout(
-            resolve,
-            duration * 1000
-          );
+    sleep(seconds) {
 
-       });
+        this.validateDuration(
+            seconds
+        );
 
-    } 
+        return new Promise(resolve => {
+
+            setTimeout(
+                resolve,
+                seconds * 1000
+            );
+
+        });
+
+    }
+
 
     // ===================================
     // VARIABLE
     // ===================================
 
-    executeVariable(node) {
+    async executeVariable(node) {
 
         if (
             !node.identifier ||
@@ -275,7 +324,7 @@ class Runtime {
             node.identifier.name;
 
         const value =
-            this.evaluate(
+            await this.evaluate(
                 node.initializer
             );
 
@@ -293,10 +342,10 @@ class Runtime {
     // PRINT
     // ===================================
 
-    executePrint(node) {
+    async executePrint(node) {
 
         const value =
-            this.evaluate(
+            await this.evaluate(
                 node.value
             );
 
@@ -312,11 +361,38 @@ class Runtime {
     formatOutput(value) {
 
         if (
-            typeof value === "object" &&
-            value !== null
+            value === undefined
         ) {
 
-            return value;
+            return "tidak terdefinisi";
+
+        }
+
+        if (
+            value === null
+        ) {
+
+            return "kosong";
+
+        }
+
+        if (
+            typeof value === "object"
+        ) {
+
+            try {
+
+                return JSON.stringify(
+                    value,
+                    null,
+                    2
+                );
+
+            } catch {
+
+                return String(value);
+
+            }
 
         }
 
@@ -331,28 +407,39 @@ class Runtime {
 
     async executeIf(node) {
 
-    const condition =
-        await this.evaluate(node.condition);
+        const condition =
+            await this.evaluate(
+                node.condition
+            );
 
-    const body =
-        condition
-            ? node.thenBody
-            : node.elseBody;
+        const body =
+            condition
+                ? node.thenBody
+                : node.elseBody;
 
-    if (!body) {
-        return null;
-    }
+        if (
+            !body
+        ) {
 
-    let result = null;
+            return null;
 
-    for (const statement of body) {
+        }
 
-        result =
-            await this.execute(statement);
+        let result = null;
 
-      }
+        for (
+            const statement
+            of body
+        ) {
 
-      return result;
+            result =
+                await this.execute(
+                    statement
+                );
+
+        }
+
+        return result;
 
     }
 
@@ -361,12 +448,12 @@ class Runtime {
     // WHILE
     // ===================================
 
-    executeWhile(node) {
+    async executeWhile(node) {
 
         let result = null;
 
         while (
-            this.evaluate(
+            await this.evaluate(
                 node.condition
             )
         ) {
@@ -377,7 +464,9 @@ class Runtime {
             ) {
 
                 result =
-                    this.execute(statement);
+                    await this.execute(
+                        statement
+                    );
 
             }
 
@@ -392,16 +481,22 @@ class Runtime {
     // FOR
     // ===================================
 
-    executeFor(node) {
+    async executeFor(node) {
 
         const start =
-            this.evaluate(node.start);
+            await this.evaluate(
+                node.start
+            );
 
         const end =
-            this.evaluate(node.end);
+            await this.evaluate(
+                node.end
+            );
 
         const step =
-            this.evaluate(node.step);
+            await this.evaluate(
+                node.step
+            );
 
         if (
             typeof start !== "number" ||
@@ -415,7 +510,21 @@ class Runtime {
 
         }
 
-        if (step === 0) {
+        if (
+            !Number.isFinite(start) ||
+            !Number.isFinite(end) ||
+            !Number.isFinite(step)
+        ) {
+
+            throw new Error(
+                "Loop 'untuk' membutuhkan angka yang valid."
+            );
+
+        }
+
+        if (
+            step === 0
+        ) {
 
             throw new Error(
                 "Loop 'untuk' tidak boleh menggunakan langkah 0."
@@ -425,15 +534,13 @@ class Runtime {
 
         let result = null;
 
-        /*
-         * Buat scope khusus loop.
-         */
-
         this.pushScope();
 
         try {
 
-            if (step > 0) {
+            if (
+                step > 0
+            ) {
 
                 for (
                     let i = start;
@@ -452,7 +559,9 @@ class Runtime {
                     ) {
 
                         result =
-                            this.execute(statement);
+                            await this.execute(
+                                statement
+                            );
 
                     }
 
@@ -477,7 +586,9 @@ class Runtime {
                     ) {
 
                         result =
-                            this.execute(statement);
+                            await this.execute(
+                                statement
+                            );
 
                     }
 
@@ -502,24 +613,15 @@ class Runtime {
 
     executeFunction(node) {
 
-        if (!node.name) {
+        if (
+            !node.name
+        ) {
 
             throw new Error(
                 "Fungsi harus memiliki nama."
             );
 
         }
-
-        /*
-         * Simpan AST function secara langsung.
-         *
-         * Ini penting untuk recursion:
-         *
-         * faktorial()
-         *
-         * dapat menemukan dirinya sendiri
-         * melalui environment global.
-         */
 
         this.scope.set(
             node.name,
@@ -535,17 +637,19 @@ class Runtime {
     // RETURN
     // ===================================
 
-    executeReturn(node) {
+    async executeReturn(node) {
 
         const value =
             node.value === null ||
             node.value === undefined
                 ? null
-                : this.evaluate(
+                : await this.evaluate(
                     node.value
                 );
 
-        throw new ReturnSignal(value);
+        throw new ReturnSignal(
+            value
+        );
 
     }
 
@@ -554,14 +658,16 @@ class Runtime {
     // IMPORT
     // ===================================
 
-    executeImport(node) {
+    async executeImport(node) {
 
         const moduleName =
             this.normalizeModuleName(
                 node.file
             );
 
-        if (!moduleName) {
+        if (
+            !moduleName
+        ) {
 
             throw new Error(
                 "Nama module tidak boleh kosong."
@@ -572,7 +678,9 @@ class Runtime {
         const module =
             this.stdlib[moduleName];
 
-        if (!module) {
+        if (
+            !module
+        ) {
 
             throw new Error(
                 `Modul '${moduleName}' tidak ditemukan di stdlib.`
@@ -581,25 +689,21 @@ class Runtime {
         }
 
         /*
-         * Import bersifat idempotent.
+         * pakai "http"
          *
-         * pakai "matematika"
-         * pakai "matematika"
+         * menghasilkan:
          *
-         * tidak masalah.
+         * http -> module
+         *
+         * sehingga:
+         *
+         * http.ambil(...)
          */
 
-        for (
-            const [name, value]
-            of Object.entries(module)
-        ) {
-
-            this.globals.set(
-                name,
-                value
-            );
-
-        }
+        this.globals.set(
+            moduleName,
+            module
+        );
 
         return module;
 
@@ -615,13 +719,6 @@ class Runtime {
             return name;
 
         }
-
-        /*
-         * Mendukung:
-         *
-         * "matematika"
-         * "matematika.js"
-         */
 
         if (
             name.endsWith(".js")
@@ -671,7 +768,7 @@ class Runtime {
     // EXPRESSION
     // ===================================
 
-    evaluate(node) {
+    async evaluate(node) {
 
         if (
             !node ||
@@ -705,13 +802,16 @@ class Runtime {
                     node.name
                 );
 
+
             // ---------------------------
             // Wait
             // ---------------------------
 
             case "WaitExpression":
 
-            return this.evaluateWaitExpression(node);
+                return await this.evaluateWaitExpression(
+                    node
+                );
 
 
             // ---------------------------
@@ -720,7 +820,7 @@ class Runtime {
 
             case "AssignmentExpression":
 
-                return this.evaluateAssignment(
+                return await this.evaluateAssignment(
                     node
                 );
 
@@ -731,7 +831,7 @@ class Runtime {
 
             case "BinaryExpression":
 
-                return this.evaluateBinary(
+                return await this.evaluateBinary(
                     node
                 );
 
@@ -742,7 +842,7 @@ class Runtime {
 
             case "LogicalExpression":
 
-                return this.evaluateLogical(
+                return await this.evaluateLogical(
                     node
                 );
 
@@ -753,18 +853,18 @@ class Runtime {
 
             case "UnaryExpression":
 
-                return this.evaluateUnary(
+                return await this.evaluateUnary(
                     node
                 );
 
 
             // ---------------------------
-            // Function call
+            // Call
             // ---------------------------
 
             case "CallExpression":
 
-                return this.evaluateCall(
+                return await this.evaluateCall(
                     node
                 );
 
@@ -775,7 +875,7 @@ class Runtime {
 
             case "MemberExpression":
 
-                return this.evaluateMember(
+                return await this.evaluateMember(
                     node
                 );
 
@@ -784,12 +884,26 @@ class Runtime {
             // Array
             // ---------------------------
 
-            case "ArrayExpression":
+            case "ArrayExpression": {
 
-                return node.elements.map(
-                    element =>
-                        this.evaluate(element)
-                );
+                const result = [];
+
+                for (
+                    const element
+                    of node.elements
+                ) {
+
+                    result.push(
+                        await this.evaluate(
+                            element
+                        )
+                    );
+
+                }
+
+                return result;
+
+            }
 
 
             // ---------------------------
@@ -806,7 +920,7 @@ class Runtime {
                 ) {
 
                     object[property.key] =
-                        this.evaluate(
+                        await this.evaluate(
                             property.value
                         );
 
@@ -827,27 +941,43 @@ class Runtime {
 
     }
 
+
     // ===================================
-    // EvaluateWait
+    // WAIT EXPRESSION
     // ===================================
 
     async evaluateWaitExpression(node) {
 
-    const duration =
-        this.evaluate(node.duration);
+        const duration =
+            await this.evaluate(
+                node.duration
+            );
 
-    await new Promise(resolve => {
-
-        setTimeout(
-            resolve,
-            duration * 1000
+        this.validateDuration(
+            duration
         );
 
-    });
+        await this.sleep(
+            duration
+        );
 
-    return await this.evaluate(
-        node.expression
-      );
+        /*
+         * Setelah delay selesai,
+         * baru evaluasi expression.
+         *
+         * Jadi:
+         *
+         * tunggu 2 http.ambil(...)
+         *
+         * = tunggu
+         * = panggil http.ambil()
+         * = tunggu Promise-nya
+         * = kembalikan hasil
+         */
+
+        return await this.evaluate(
+            node.expression
+        );
 
     }
 
@@ -857,11 +987,6 @@ class Runtime {
     // ===================================
 
     getVariable(name) {
-
-        /*
-         * Cari dari scope terdalam
-         * menuju global.
-         */
 
         for (
             let i = this.scopes.length - 1;
@@ -893,19 +1018,15 @@ class Runtime {
     // ASSIGNMENT
     // ===================================
 
-    evaluateAssignment(node) {
+    async evaluateAssignment(node) {
 
         const value =
-            this.evaluate(
+            await this.evaluate(
                 node.right
             );
 
         const target =
             node.left;
-
-        // -------------------------------
-        // Variable
-        // -------------------------------
 
         if (
             target.type === "Identifier"
@@ -918,22 +1039,16 @@ class Runtime {
 
         }
 
-
-        // -------------------------------
-        // Property / index
-        // -------------------------------
-
         if (
             target.type === "MemberExpression"
         ) {
 
-            return this.assignMember(
+            return await this.assignMember(
                 target,
                 value
             );
 
         }
-
 
         throw new Error(
             "Target assignment tidak valid."
@@ -943,11 +1058,6 @@ class Runtime {
 
 
     assignVariable(name, value) {
-
-        /*
-         * Cari scope yang sudah memiliki
-         * variable tersebut.
-         */
 
         for (
             let i = this.scopes.length - 1;
@@ -980,10 +1090,14 @@ class Runtime {
     }
 
 
-    assignMember(node, value) {
+    // ===================================
+    // MEMBER ASSIGNMENT
+    // ===================================
+
+    async assignMember(node, value) {
 
         const object =
-            this.evaluate(
+            await this.evaluate(
                 node.object
             );
 
@@ -1000,7 +1114,7 @@ class Runtime {
 
         const property =
             node.computed
-                ? this.evaluate(
+                ? await this.evaluate(
                     node.property
                 )
                 : node.property.name;
@@ -1017,10 +1131,10 @@ class Runtime {
     // UNARY
     // ===================================
 
-    evaluateUnary(node) {
+    async evaluateUnary(node) {
 
         const value =
-            this.evaluate(
+            await this.evaluate(
                 node.argument
             );
 
@@ -1059,10 +1173,10 @@ class Runtime {
     // LOGICAL
     // ===================================
 
-    evaluateLogical(node) {
+    async evaluateLogical(node) {
 
         const left =
-            this.evaluate(
+            await this.evaluate(
                 node.left
             );
 
@@ -1070,11 +1184,14 @@ class Runtime {
             node.operator === "AND"
         ) {
 
-            return (
-                left &&
-                this.evaluate(
-                    node.right
-                )
+            if (!left) {
+
+                return left;
+
+            }
+
+            return await this.evaluate(
+                node.right
             );
 
         }
@@ -1083,11 +1200,14 @@ class Runtime {
             node.operator === "OR"
         ) {
 
-            return (
-                left ||
-                this.evaluate(
-                    node.right
-                )
+            if (left) {
+
+                return left;
+
+            }
+
+            return await this.evaluate(
+                node.right
             );
 
         }
@@ -1103,15 +1223,15 @@ class Runtime {
     // BINARY
     // ===================================
 
-    evaluateBinary(node) {
+    async evaluateBinary(node) {
 
         const left =
-            this.evaluate(
+            await this.evaluate(
                 node.left
             );
 
         const right =
-            this.evaluate(
+            await this.evaluate(
                 node.right
             );
 
@@ -1208,17 +1328,30 @@ class Runtime {
     // FUNCTION CALL
     // ===================================
 
-    evaluateCall(node) {
+    async evaluateCall(node) {
 
-        const args =
-            node.arguments.map(
-                argument =>
-                    this.evaluate(argument)
+        /*
+         * Evaluasi argument satu per satu.
+         */
+
+        const args = [];
+
+        for (
+            const argument
+            of node.arguments
+        ) {
+
+            args.push(
+                await this.evaluate(
+                    argument
+                )
             );
+
+        }
 
 
         // =================================
-        // Method Call
+        // METHOD CALL
         // =================================
 
         if (
@@ -1228,7 +1361,7 @@ class Runtime {
         ) {
 
             const object =
-                this.evaluate(
+                await this.evaluate(
                     node.callee.object
                 );
 
@@ -1245,7 +1378,7 @@ class Runtime {
 
             const property =
                 node.callee.computed
-                    ? this.evaluate(
+                    ? await this.evaluate(
                         node.callee.property
                     )
                     : node.callee.property.name;
@@ -1264,16 +1397,14 @@ class Runtime {
             }
 
             /*
-             * apply(object, args)
+             * await juga menangani:
              *
-             * penting untuk:
-             *
-             * array.push()
-             * array.pop()
-             * object.method()
+             * function biasa
+             * Promise
+             * async function
              */
 
-            return func.apply(
+            return await func.apply(
                 object,
                 args
             );
@@ -1282,33 +1413,41 @@ class Runtime {
 
 
         // =================================
-        // Normal Function
+        // NORMAL FUNCTION
         // =================================
 
         const func =
-            this.evaluate(
+            await this.evaluate(
                 node.callee
             );
 
 
-        // Standard library
+        // =================================
+        // STDLIB / JS FUNCTION
+        // =================================
+
         if (
             typeof func === "function"
         ) {
 
-            return func(...args);
+            return await func(
+                ...args
+            );
 
         }
 
 
-        // User-defined function
+        // =================================
+        // USER FUNCTION
+        // =================================
+
         if (
             func &&
             func.type ===
                 "FunctionDeclaration"
         ) {
 
-            return this.callFunction(
+            return await this.callFunction(
                 func,
                 args
             );
@@ -1327,14 +1466,7 @@ class Runtime {
     // USER FUNCTION
     // ===================================
 
-    callFunction(func, args) {
-
-        /*
-         * Function mendapat scope baru.
-         *
-         * Scope parent tetap bisa diakses
-         * melalui this.scopes.
-         */
+    async callFunction(func, args) {
 
         this.pushScope();
 
@@ -1361,34 +1493,37 @@ class Runtime {
 
             }
 
-
             let result = null;
 
-            for (
-                const statement
-                of func.body
-            ) {
+            try {
 
-                result =
-                    this.execute(
-                        statement
-                    );
+                for (
+                    const statement
+                    of func.body
+                ) {
+
+                    result =
+                        await this.execute(
+                            statement
+                        );
+
+                }
+
+            } catch (error) {
+
+                if (
+                    error instanceof ReturnSignal
+                ) {
+
+                    return error.value;
+
+                }
+
+                throw error;
 
             }
 
             return result;
-
-        } catch (error) {
-
-            if (
-                error instanceof ReturnSignal
-            ) {
-
-                return error.value;
-
-            }
-
-            throw error;
 
         } finally {
 
@@ -1403,10 +1538,10 @@ class Runtime {
     // MEMBER ACCESS
     // ===================================
 
-    evaluateMember(node) {
+    async evaluateMember(node) {
 
         const object =
-            this.evaluate(
+            await this.evaluate(
                 node.object
             );
 
@@ -1423,7 +1558,7 @@ class Runtime {
 
         const property =
             node.computed
-                ? this.evaluate(
+                ? await this.evaluate(
                     node.property
                 )
                 : node.property.name;
@@ -1436,7 +1571,7 @@ class Runtime {
 
 
 // =======================================
-// Export
+// EXPORT
 // =======================================
 
 module.exports = Runtime;
